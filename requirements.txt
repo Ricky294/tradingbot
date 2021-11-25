@@ -1,0 +1,6 @@
+git+https://github.com/Ricky294/crypto_data.git@develop
+numpy
+pandas
+python-binance
+pyyaml
+ta-lib

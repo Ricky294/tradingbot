@@ -1,0 +1,15 @@
+broker_name: binance_
+symbol: btcusdt
+interval: 1h
+market: futures
+
+# ISO 8601 formatted time or timestamp
+# start_time: 2021-01-01 00:00:00
+
+limit: 5000
+
+# Define which columns you would like to include from the followings:
+# open_time, open_price, high_price, low_price, close_price,
+# volume, close_time, quote_asset_volume, number_of_trades,
+# taker_buy_base_asset_volume, taker_buy_quote_asset_volume
+columns: [open_time, open_price, high_price, low_price, close_price, volume, number_of_trades]
