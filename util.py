@@ -1,6 +1,9 @@
 import json
+import operator
 import os
 import pathlib
+import random
+from typing import Union
 
 import yaml
 
@@ -23,7 +26,10 @@ def read_config(path: str) -> dict:
         return read_json(path)
 
 
-def round_down(number: float, precision: int):
+def round_down(number: Union[float, int, None], precision: int):
+    if number is None:
+        return
+
     s = str(number)
     if "." not in s:
         return float(number)
@@ -32,4 +38,33 @@ def round_down(number: float, precision: int):
 
 
 def remove_none(dct: dict):
-    return {k: v for k, v in dct.items() if v is not None}
+    return {k: v for k, v in dct.items() if v is not None and v != "None"}
+
+
+def generate_ascii(start: int, end: int):
+    return (chr(n) for n in range(start, end))
+
+
+def generate_random_string(chars: str, size: int):
+    return "".join(random.choice(chars) for _ in range(size))
+
+
+def get_object_from_module(module_name: str, object_name: str):
+    import importlib
+
+    module = importlib.import_module(module_name)
+
+    return getattr(module, object_name)
+
+
+logical_operators = {
+    ">": operator.gt,
+    "<": operator.lt,
+    ">=": operator.ge,
+    "<=": operator.le,
+    "==": operator.eq,
+}
+
+
+def compare(left_value, logical_operator, right_value):
+    return logical_operators[logical_operator](left_value, right_value)

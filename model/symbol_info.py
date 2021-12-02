@@ -21,6 +21,36 @@ from typing import List, Dict
 # }
 
 
+class PriceFilter:
+    def __init__(self, min_price: float, max_price: float, tick_size: float):
+        self.min_price = float(min_price)
+        self.max_price = float(max_price)
+        self.tick_size = float(tick_size)
+
+
+class LimitLotSizeFilter:
+    def __init__(self, step_size: float, max_quantity: float, min_quantity: float):
+        self.max_quantity = float(max_quantity)
+        self.min_quantity = float(min_quantity)
+        self.step_size = float(step_size)
+
+
+class MarketLotSizeFilter:
+    def __init__(self, step_size: float, max_quantity: float, min_quantity: float):
+        self.max_quantity = float(max_quantity)
+        self.min_quantity = float(min_quantity)
+        self.step_size = float(step_size)
+
+
+class PercentPriceFilter:
+    def __init__(
+        self, multiplier_up: float, multiplier_down: float, multiplier_decimal: int
+    ):
+        self.multiplier_up = float(multiplier_up)
+        self.multiplier_down = float(multiplier_down)
+        self.multiplier_decimal = float(multiplier_decimal)
+
+
 class SymbolInfo:
     def __init__(self, **kwargs):
         self.symbol: str = kwargs["symbol"]
@@ -32,11 +62,39 @@ class SymbolInfo:
         self.base_asset_precision: int = kwargs["baseAssetPrecision"]
         self.quote_precision: int = kwargs["quotePrecision"]
         self.underlying_type: str = kwargs["underlyingType"]
-        self.filters: List[Dict] = kwargs["filters"]
+
+        filters: List[Dict] = kwargs["filters"]
+        for flt in filters:
+            if "PRICE_FILTER" in flt:
+                self.price_filter = PriceFilter(
+                    max_price=flt["maxPrice"],
+                    min_price=flt["minPrice"],
+                    tick_size=flt["tickSize"],
+                )
+            elif "LOT_SIZE" in flt:
+                self.limit_lot_size_filter = LimitLotSizeFilter(
+                    max_quantity=flt["maxQty"],
+                    min_quantity=flt["minQty"],
+                    step_size=flt["stepSize"],
+                )
+            elif "MARKET_LOT_SIZE" in flt:
+                self.limit_lot_size_filter = LimitLotSizeFilter(
+                    max_quantity=flt["maxQty"],
+                    min_quantity=flt["minQty"],
+                    step_size=flt["stepSize"],
+                )
+            elif "MAX_NUM_ORDERS" in flt:
+                self.max_orders = float(flt["limit"])
+            elif "MAX_NUM_ALGO_ORDERS" in flt:
+                self.max_algo_orders = float(flt["limit"])
+            elif "MIN_NOTIONAL" in flt:
+                self.minimum_notional = int(flt["notional"])
+            elif "PERCENT_PRICE" in flt:
+                self.price_percent_filter = PercentPriceFilter(
+                    multiplier_up=float(flt["multiplierUp"]),
+                    multiplier_down=float(flt["multiplierDown"]),
+                    multiplier_decimal=int(flt["multiplierDecimal"]),
+                )
+
         self.order_types: List[str] = kwargs["orderTypes"]
         self.time_in_force: List[str] = kwargs["timeInForce"]
-
-    def get_filter(self, filter_type: str):
-        for filter_ in self.filters:
-            if filter_type == filter_["filterType"]:
-                return filter_

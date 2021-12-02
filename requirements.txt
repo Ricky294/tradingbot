@@ -1,4 +1,4 @@
-git+https://github.com/Ricky294/crypto_data.git@develop
+git+https://github.com/Ricky294/cryptodata.git@develop
 numpy
 pandas
 python-binance
