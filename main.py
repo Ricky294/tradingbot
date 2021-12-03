@@ -1,8 +1,8 @@
 from typing import Dict, Union
 
 from binance.client import Client
-from crypto_data.binance.candle import StreamCandle
 
+from crypto_data.binance.candle import StreamCandle
 from crypto_data.binance.extract import get_candles, Limit
 from crypto_data.binance.schema import (
     OPEN_TIME,
@@ -15,15 +15,16 @@ from crypto_data.binance.schema import (
 from crypto_data.binance.stream import candle_stream, candle_multi_stream
 from crypto_data.shared.candle_db import CandleDB
 
+from backtest import backtest_candle_stream, BacktestClient, BacktestFuturesTrader
+from binance_ import BinanceFuturesTrader
 from indicator import Indicator
 from strategy import SingleSymbolStrategy, MultiSymbolStrategy
-from trader import Trader
+from abstract import FuturesTrader
 from util import read_config, get_object_from_module
 
 
-def run_strategy(
+def run_futures_strategy(
     interval: str,
-    trader: Trader,
     strategy: Union[SingleSymbolStrategy, MultiSymbolStrategy],
     candle_db: CandleDB,
     limit: Limit = None,
@@ -32,7 +33,7 @@ def run_strategy(
         return get_candles(
             symbol=symbol,
             interval=interval,
-            market=trader.market,
+            market="FUTURES",
             db=candle_db,
             columns=[
                 OPEN_TIME,
@@ -52,7 +53,7 @@ def run_strategy(
         candles = {symbol: __get_candles(symbol) for symbol in strategy.symbols}
         candle_multi_stream(
             interval=interval,
-            market=trader.market,
+            market="FUTURES",
             symbol_candles=candles,
             on_candle=on_candle,
             on_candle_close=strategy,
@@ -62,11 +63,12 @@ def run_strategy(
         candle_stream(
             symbol=strategy.symbol,
             interval=interval,
-            market=trader.market,
+            market="FUTURES",
             candles=candles,
             on_candle=on_candle,
             on_candle_close=strategy,
         )
+        backtest_candle_stream(candles=candles, on_candle_close=strategy)
 
 
 class ConfigError(Exception):
@@ -84,34 +86,42 @@ def create_indicators(indicators_config: Dict[str, Dict]) -> Dict[str, Indicator
 
 
 def create_strategy(
-    strategy_config: Dict[str, any], trader: Trader
+    config: Dict[str, any], trader: FuturesTrader
 ) -> Union[SingleSymbolStrategy, MultiSymbolStrategy]:
-    indicators_config = strategy_config.pop("indicators")
+    indicators_config = config.pop("indicators")
     indicators: Dict[str, Indicator] = create_indicators(indicators_config)
 
     strategy_class = get_object_from_module(
-        module_name="strategy", object_name=strategy_config.pop("type")
+        module_name="strategy", object_name=config.pop("type")
     )
 
-    return strategy_class(**strategy_config, trader=trader, **indicators)
+    return strategy_class(**config, trader=trader, **indicators)
 
 
-def create_strategy_objects_from_config(client: Client, config: Dict[str, any]):
+def create_strategy_objects_from_config(
+    client: Union[Client, BacktestClient], config: Dict[str, any]
+):
 
     try:
         limit = None
         if config["limit"]["type"] != "ignore":
             limit = Limit(**config["limit"])
 
-        trader = Trader(client=client, **config["trader"])
-        strategy = create_strategy(config["strategy"], trader)
+        trader_config = config.pop("trader")
+        if isinstance(client, Client):
+            trader = BinanceFuturesTrader(client=client, **trader_config)
+        elif isinstance(client, BacktestClient):
+            trader = BacktestFuturesTrader(client=client, **trader_config)
+        else:
+            raise ValueError("'trader' must be type of Client or BacktestClient")
+
+        strategy = create_strategy(config=config["strategy"], trader=trader)
 
         candle_db = CandleDB(config["database_path"])
 
         return {
             "interval": config["interval"],
             "candle_db": candle_db,
-            "trader": trader,
             "strategy": strategy,
             "limit": limit,
         }
@@ -120,11 +130,19 @@ def create_strategy_objects_from_config(client: Client, config: Dict[str, any]):
 
 
 def run_strategy_from_config(secrets_path: str, config_path: str):
-    client = Client(**read_config(secrets_path))
     config = read_config(config_path)
 
+    mode = config.pop("mode").lower()
+    if mode == "live":
+        client = Client(**read_config(secrets_path))
+    elif mode == "backtest":
+        client = BacktestClient()
+    else:
+        raise ConfigError("'mode' must be either 'live' or 'backtest'")
+
     strategy_objects = create_strategy_objects_from_config(client, config)
-    run_strategy(**strategy_objects)
+
+    run_futures_strategy(**strategy_objects)
 
 
 if __name__ == "__main__":

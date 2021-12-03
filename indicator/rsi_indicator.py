@@ -1,9 +1,8 @@
-import numpy as np
 import pandas as pd
 import talib
 from crypto_data.binance.schema import CLOSE_PRICE
 
-from indicator import Indicator, IndicatorResult
+from indicator import Indicator
 from numpy_util import cross_signal
 
 
@@ -32,14 +31,4 @@ class RSIIndicator(Indicator):
                 "sell_signal": sell_signal_line,
             }
         )
-        return IndicatorResult(
-            dataframe=indicator_df,
-            buy_signal=rsi[-1] <= self.lower_limit,
-            sell_signal=rsi[-1] >= self.upper_limit,
-        )
-
-
-x = np.array([5, 10, 20, 30.2, 40, 32, 5])
-y = np.array([1, 2, 3, 35, 55, 20, 10])
-
-z = np.array((x > 30) & (x[-1] < 30))
+        return indicator_df

@@ -1,22 +1,17 @@
 from typing import Callable, List, Dict
 
 import pandas as pd
-from binance.client import Client
 from crypto_data.binance.candle import StreamCandle
 
-from binance_.futures import (
-    get_futures_position,
-    get_futures_open_orders,
-    get_futures_symbol_info,
-    get_futures_balances,
-)
+from abstract import FuturesTrader
+
 from model import Balance, SymbolTradeInfo
 
 
 def multi_candles_with_trade_info(
     symbols: List[str],
     candle: StreamCandle,
-    client: Client,
+    trader: FuturesTrader,
     candles: Dict[str, pd.DataFrame],
     callback: Callable[
         [
@@ -28,12 +23,12 @@ def multi_candles_with_trade_info(
         any,
     ],
 ):
-    balances = get_futures_balances(client)
+    balances = trader.get_balances()
     symbol_trade_info = {
         symbol.upper(): SymbolTradeInfo(
-            orders=get_futures_open_orders(client, symbol=symbol),
-            symbol_info=get_futures_symbol_info(client, symbol=symbol),
-            position=get_futures_position(client, symbol=symbol),
+            position=trader.get_position(symbol=symbol),
+            orders=trader.get_open_orders(symbol=symbol),
+            symbol_info=trader.get_symbol_info(symbol=symbol),
         )
         for symbol in symbols
     }
@@ -43,13 +38,13 @@ def multi_candles_with_trade_info(
 
 def candles_with_trade_info(
     symbol: str,
-    client: Client,
+    trader: FuturesTrader,
     candles: pd.DataFrame,
     callback: Callable[[pd.DataFrame, SymbolTradeInfo, List[Balance]], any],
 ):
-    balances = get_futures_balances(client)
-    position = get_futures_position(client, symbol=symbol)
-    orders = get_futures_open_orders(client, symbol=symbol)
-    symbol_info = get_futures_symbol_info(client, symbol=symbol)
+    balances = trader.get_balances()
+    position = trader.get_position(symbol=symbol)
+    orders = trader.get_open_orders(symbol=symbol)
+    symbol_info = trader.get_symbol_info(symbol=symbol)
 
     return callback(candles, SymbolTradeInfo(orders, symbol_info, position), balances)

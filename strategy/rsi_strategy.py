@@ -5,11 +5,11 @@ from typing import List
 from indicator import RSIIndicator
 from model import Balance, SymbolTradeInfo
 from strategy import SingleSymbolStrategy
-from trader.futures_trader import Trader
+from binance_.futures_trader import FuturesTrader
 
 
 class RSIStrategy(SingleSymbolStrategy):
-    def __init__(self, symbol: str, trader: Trader, rsi: RSIIndicator):
+    def __init__(self, symbol: str, trader: FuturesTrader, rsi: RSIIndicator):
         super().__init__(symbol=symbol, trader=trader)
         self.rsi = rsi
 

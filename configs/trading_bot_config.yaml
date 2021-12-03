@@ -4,10 +4,10 @@ broker: binance
 # interval: 1m | 3m | 5m | 15m | 30m | 1h | 2h | 4h | 6h | 8h | 12h | 1d | 3d | 1w | 1M
 interval: 1h
 
+# mode: live | backtest
+mode: live
+
 trader:
-  # market: futures | spot
-  # !!! spot is not supported !!!
-  market: futures
   # 'ratio': > 0 and < 1
   # Note: Avoid values close to 0 and 1.
   ratio: 0.9

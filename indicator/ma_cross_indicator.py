@@ -6,7 +6,7 @@ import pandas as pd
 import talib
 from crypto_data.binance.schema import CLOSE_PRICE
 
-from indicator import Indicator, IndicatorResult
+from indicator import Indicator
 from numpy_util import cross_signal
 
 
@@ -85,7 +85,7 @@ class MACrossIndicator(Indicator):
         self.slow_ma_type = slow_ma_type
         self.slow_ma_column = slow_ma_column
 
-    def result(self, candle_df: pd.DataFrame) -> IndicatorResult:
+    def result(self, candle_df: pd.DataFrame):
         def talib_ma(ma_type: str, ma_column: str, ma_period: int) -> np.ndarray:
             return getattr(talib, ma_type)(candle_df[ma_column], timeperiod=ma_period)
 
@@ -99,17 +99,11 @@ class MACrossIndicator(Indicator):
         buy_signal_line = cross_signal(fast_ma_data, ">", slow_ma_data)
         sell_signal_line = cross_signal(fast_ma_data, "<", slow_ma_data)
 
-        return IndicatorResult(
-            dataframe=pd.DataFrame(
-                {
-                    "fast": fast_ma_data,
-                    "slow": slow_ma_data,
-                    "buy_signal": buy_signal_line,
-                    "sell_signal": sell_signal_line,
-                }
-            ),
-            buy_signal=(fast_ma_data[-1] > slow_ma_data[-1])
-            and (fast_ma_data[-2] < slow_ma_data[-2]),
-            sell_signal=(fast_ma_data[-1] < slow_ma_data[-1])
-            and (fast_ma_data[-2] > slow_ma_data[-2]),
+        return pd.DataFrame(
+            {
+                "fast": fast_ma_data,
+                "slow": slow_ma_data,
+                "buy_signal": buy_signal_line,
+                "sell_signal": sell_signal_line,
+            }
         )

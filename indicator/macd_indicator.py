@@ -2,7 +2,7 @@ import pandas as pd
 import talib
 from crypto_data.binance.schema import CLOSE_PRICE
 
-from indicator import Indicator, IndicatorResult
+from indicator import Indicator
 
 
 class MACDIndicator(Indicator):
@@ -26,8 +26,7 @@ class MACDIndicator(Indicator):
         indicator_df = pd.DataFrame(
             {"macd": macd, "signal": signal, "histogram": histogram}
         )
-        return IndicatorResult(
-            dataframe=indicator_df,
-            buy_signal=(macd[-1] > signal[-1]) and (macd[-2] < signal[-2]),
-            sell_signal=(macd[-1] < signal[-1]) and (macd[-2] > signal[-2]),
-        )
+        return indicator_df
+        #    buy_signal=(macd[-1] > signal[-1]) and (macd[-2] < signal[-2]),
+        #    sell_signal=(macd[-1] < signal[-1]) and (macd[-2] > signal[-2]),
+        #
