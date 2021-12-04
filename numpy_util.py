@@ -8,6 +8,14 @@ from util import compare
 def cross_signal(
     arr: np.ndarray, logical_operator: str, other: Union[float, np.ndarray]
 ) -> np.array:
+
+    if arr.size == 0:
+        return np.array([])
+    if arr.size == 1:
+        if isinstance(other, np.ndarray):
+            return np.array([compare(arr[0], logical_operator, other[0])])
+        return np.array([compare(arr[0], logical_operator, other)])
+
     sliding_array = np.lib.stride_tricks.sliding_window_view(arr, (2,))
 
     if isinstance(other, np.ndarray):

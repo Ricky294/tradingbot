@@ -23,6 +23,11 @@ def multi_candles_with_trade_info(
         any,
     ],
 ):
+    from backtest import BacktestFuturesTrader
+
+    if isinstance(trader, BacktestFuturesTrader):
+        trader.__call__(candles)
+
     balances = trader.get_balances()
     symbol_trade_info = {
         symbol.upper(): SymbolTradeInfo(
@@ -42,6 +47,11 @@ def candles_with_trade_info(
     candles: pd.DataFrame,
     callback: Callable[[pd.DataFrame, SymbolTradeInfo, List[Balance]], any],
 ):
+    from backtest import BacktestFuturesTrader
+
+    if isinstance(trader, BacktestFuturesTrader):
+        trader.__call__({symbol: candles})
+
     balances = trader.get_balances()
     position = trader.get_position(symbol=symbol)
     orders = trader.get_open_orders(symbol=symbol)

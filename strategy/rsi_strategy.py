@@ -5,7 +5,7 @@ from typing import List
 from indicator import RSIIndicator
 from model import Balance, SymbolTradeInfo
 from strategy import SingleSymbolStrategy
-from binance_.futures_trader import FuturesTrader
+from abstract import FuturesTrader
 
 
 class RSIStrategy(SingleSymbolStrategy):

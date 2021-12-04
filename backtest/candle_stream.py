@@ -1,11 +1,30 @@
-from typing import Callable
+from typing import Dict
 
 import pandas as pd
+
+from strategy import SingleSymbolStrategy, MultiSymbolStrategy
+
+
+def backtest_candle_multi_stream(
+    candles: Dict[str, pd.DataFrame],
+    strategy: MultiSymbolStrategy,
+    trader,
+    skip: int = 0,
+):
+    """
+    Simulates continuous data creation.
+    """
+
+    for i in range(skip, len(candles)):
+        candles_head = candles.head(i + 1)
+        trader({strategy.symbols})
+        strategy(candles_head)
 
 
 def backtest_candle_stream(
     candles: pd.DataFrame,
-    on_candle_close: Callable[[pd.DataFrame], None],
+    strategy: SingleSymbolStrategy,
+    trader,
     skip: int = 0,
     *args,
     **kwargs,
@@ -15,4 +34,5 @@ def backtest_candle_stream(
     """
     for i in range(skip, len(candles)):
         candles_head = candles.head(i + 1)
-        on_candle_close(candles_head)
+        trader({strategy.symbol: candles_head})
+        strategy(candles_head)

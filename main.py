@@ -1,152 +1,73 @@
-from typing import Dict, Union
+from typing import Dict, Optional, Union
 
-from binance.client import Client
-
-from crypto_data.binance.candle import StreamCandle
-from crypto_data.binance.extract import get_candles, Limit
-from crypto_data.binance.schema import (
-    OPEN_TIME,
-    OPEN_PRICE,
-    CLOSE_PRICE,
-    HIGH_PRICE,
-    LOW_PRICE,
-    VOLUME,
-)
-from crypto_data.binance.stream import candle_stream, candle_multi_stream
+import pandas as pd
+from crypto_data.binance.extract import Limit
 from crypto_data.shared.candle_db import CandleDB
 
-from backtest import backtest_candle_stream, BacktestClient, BacktestFuturesTrader
-from binance_ import BinanceFuturesTrader
-from indicator import Indicator
-from strategy import SingleSymbolStrategy, MultiSymbolStrategy
-from abstract import FuturesTrader
-from util import read_config, get_object_from_module
+from strategy_runner import BinanceRunner, BacktestRunner
+from util import read_config
 
 
-def run_futures_strategy(
-    interval: str,
-    strategy: Union[SingleSymbolStrategy, MultiSymbolStrategy],
-    candle_db: CandleDB,
-    limit: Limit = None,
-):
-    def __get_candles(symbol: str):
-        return get_candles(
+def get_candles_from_config(
+    config: Dict[str, any]
+) -> Union[pd.DataFrame, Dict[str, pd.DataFrame]]:
+    import crypto_data.binance.extract
+
+    def create_limit(limit_config: Dict[str, any]) -> Optional[Limit]:
+        if limit_config["type"] != "ignore":
+            return Limit(**limit_config["limit"])
+
+    symbols = config["symbols"]
+    interval = config["interval"]
+    market = config["market"]
+    candle_db = CandleDB(config["database_path"])
+    columns = config["columns"]
+    limit = create_limit(config["limit"])
+
+    def get_candles(symbol: str):
+        return crypto_data.binance.extract.get_candles(
             symbol=symbol,
             interval=interval,
-            market="FUTURES",
+            market=str(market).upper(),
             db=candle_db,
-            columns=[
-                OPEN_TIME,
-                OPEN_PRICE,
-                CLOSE_PRICE,
-                HIGH_PRICE,
-                LOW_PRICE,
-                VOLUME,
-            ],
+            columns=columns,
             limit=limit,
         )
 
-    def on_candle(candle: StreamCandle):
-        print(candle)
+    if len(symbols) == 0:
+        raise ValueError("At least one symbol should be given!")
+    elif len(symbols) == 1:
+        return get_candles(symbol=symbols[0])
 
-    if isinstance(strategy, MultiSymbolStrategy):
-        candles = {symbol: __get_candles(symbol) for symbol in strategy.symbols}
-        candle_multi_stream(
-            interval=interval,
-            market="FUTURES",
-            symbol_candles=candles,
-            on_candle=on_candle,
-            on_candle_close=strategy,
-        )
-    else:
-        candles = __get_candles(strategy.symbol)
-        candle_stream(
-            symbol=strategy.symbol,
-            interval=interval,
-            market="FUTURES",
-            candles=candles,
-            on_candle=on_candle,
-            on_candle_close=strategy,
-        )
-        backtest_candle_stream(candles=candles, on_candle_close=strategy)
+    return {symbol: get_candles(symbol=symbol) for symbol in symbols}
 
 
-class ConfigError(Exception):
-    pass
+def run_binance_strategy_from_config():
+    config = read_config("configs/trading_bot_config.yaml")
+    binance_keys = read_config("configs/binance_secrets.json")
 
+    candles = get_candles_from_config(config)
 
-def create_indicators(indicators_config: Dict[str, Dict]) -> Dict[str, Indicator]:
-    indicators = {
-        name: get_object_from_module(
-            module_name="indicator", object_name=indicator.pop("type")
-        )(**indicator)
-        for name, indicator in indicators_config.items()
-    }
-    return indicators
-
-
-def create_strategy(
-    config: Dict[str, any], trader: FuturesTrader
-) -> Union[SingleSymbolStrategy, MultiSymbolStrategy]:
-    indicators_config = config.pop("indicators")
-    indicators: Dict[str, Indicator] = create_indicators(indicators_config)
-
-    strategy_class = get_object_from_module(
-        module_name="strategy", object_name=config.pop("type")
+    runner = BinanceRunner.from_config(
+        candles=candles,
+        config=config,
+        api_key=binance_keys["api_key"],
+        api_secret=binance_keys["api_secret"],
     )
-
-    return strategy_class(**config, trader=trader, **indicators)
-
-
-def create_strategy_objects_from_config(
-    client: Union[Client, BacktestClient], config: Dict[str, any]
-):
-
-    try:
-        limit = None
-        if config["limit"]["type"] != "ignore":
-            limit = Limit(**config["limit"])
-
-        trader_config = config.pop("trader")
-        if isinstance(client, Client):
-            trader = BinanceFuturesTrader(client=client, **trader_config)
-        elif isinstance(client, BacktestClient):
-            trader = BacktestFuturesTrader(client=client, **trader_config)
-        else:
-            raise ValueError("'trader' must be type of Client or BacktestClient")
-
-        strategy = create_strategy(config=config["strategy"], trader=trader)
-
-        candle_db = CandleDB(config["database_path"])
-
-        return {
-            "interval": config["interval"],
-            "candle_db": candle_db,
-            "strategy": strategy,
-            "limit": limit,
-        }
-    except KeyError as e:
-        raise ConfigError(f"'{e.args[0]}' is missing from config.")
+    runner.run(on_candle=lambda c: print(c))
 
 
-def run_strategy_from_config(secrets_path: str, config_path: str):
-    config = read_config(config_path)
+def run_backtest_strategy_from_config():
+    config = read_config("configs/trading_bot_config.yaml")
 
-    mode = config.pop("mode").lower()
-    if mode == "live":
-        client = Client(**read_config(secrets_path))
-    elif mode == "backtest":
-        client = BacktestClient()
-    else:
-        raise ConfigError("'mode' must be either 'live' or 'backtest'")
+    candles = get_candles_from_config(config)
 
-    strategy_objects = create_strategy_objects_from_config(client, config)
-
-    run_futures_strategy(**strategy_objects)
+    runner = BacktestRunner.from_config(
+        candles=candles,
+        config=config,
+    )
+    runner.run()
 
 
 if __name__ == "__main__":
-    run_strategy_from_config(
-        secrets_path="secrets/binance_secrets.json",
-        config_path="configs/trading_bot_config.yaml",
-    )
+    run_backtest_strategy_from_config()

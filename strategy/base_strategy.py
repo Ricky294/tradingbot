@@ -4,11 +4,8 @@ from typing import List, Dict, Callable
 import pandas as pd
 from crypto_data.binance.candle import StreamCandle
 
-from abstract import (
-    FuturesTrader,
-    candles_with_trade_info,
-    multi_candles_with_trade_info,
-)
+from abstract import FuturesTrader, candles_with_trade_info
+
 from model import SymbolTradeInfo, Balance
 
 
@@ -60,6 +57,8 @@ class MultiSymbolStrategy(Strategy):
         pass
 
     def __call__(self, candle: StreamCandle, candles: Dict[str, pd.DataFrame]):
+        from abstract import multi_candles_with_trade_info
+
         multi_candles_with_trade_info(
             candle=candle,
             symbols=self.symbols,

@@ -1,7 +1,9 @@
-from typing import List
+from typing import List, Callable, Dict
+
+import pandas as pd
 
 from abstract import FuturesTrader
-from backtest.client import BacktestClient
+from backtest import BacktestClient
 from model import Balance, Order, Position
 
 
@@ -10,7 +12,7 @@ class TradeError(Exception):
         self.msg = msg
 
 
-class BacktestFuturesTrader(FuturesTrader):
+class BacktestFuturesTrader(FuturesTrader, Callable):
     def __init__(self, client: BacktestClient, ratio: float):
         """
         :param client: Broker client
@@ -20,6 +22,10 @@ class BacktestFuturesTrader(FuturesTrader):
         """
         super().__init__(ratio)
         self.client = client
+        self.candles: Dict[str, pd.DataFrame]
+
+    def __call__(self, candles: Dict[str, pd.DataFrame]):
+        self.candles = candles
 
     def cancel_orders(self, symbol: str) -> List[Order]:
         pass

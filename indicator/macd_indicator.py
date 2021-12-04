@@ -27,6 +27,3 @@ class MACDIndicator(Indicator):
             {"macd": macd, "signal": signal, "histogram": histogram}
         )
         return indicator_df
-        #    buy_signal=(macd[-1] > signal[-1]) and (macd[-2] < signal[-2]),
-        #    sell_signal=(macd[-1] < signal[-1]) and (macd[-2] > signal[-2]),
-        #
