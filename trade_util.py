@@ -1,15 +1,25 @@
 from typing import Union
 
+from model import Position
 from model.balance import Balance
-from model.order import OrderSide, OrderError
+from model.order import OrderSide, OrderError, Order
+
+
+def flip_side(side: str):
+    return "SELL" if side == "BUY" else "SELL"
 
 
 def calculate_quantity(
-    balance: Balance, price: float, percentage: float, leverage: int = 1
+    side: str, balance: Balance, price: float, percentage: float, leverage: int = 1
 ):
     # Be cautious! It's only works if you do not have ANY open orders/positions in place.
     # If you have open orders/position you need a more complex calculation considering other factors as well.
-    return balance.free / price * percentage * leverage
+    quantity = balance.free / price * percentage * leverage
+    return quantity if side == "BUY" else -quantity
+
+
+def calculate_profit(order: Order, position: Position, leverage: int):
+    return abs(position.entry_price - order.stop_price) * position.quantity * leverage
 
 
 def calculate_pnl(
@@ -85,6 +95,3 @@ def calculate_liquidation_price(
     if min_balance > balance:
         raise OrderError("")
     return binance_btc_liq_balance(balance, quantity, entry_price)
-
-
-print(calculate_liquidation_price(60_000, 0.003, 179, 2))

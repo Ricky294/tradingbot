@@ -1,25 +1,24 @@
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional
+
 from binance.client import Client
 
 from abstract import FuturesTrader
-from model import Order, TimeInForce, Balance, Position, SymbolInfo
+from model import Order, Balance, Position, SymbolInfo
 
 
 class BinanceFuturesTrader(FuturesTrader):
-    def __init__(self, client: Client, ratio: float):
+    def get_leverage(self, symbol) -> int:
+        pass
+
+    def __init__(self, client: Client, trade_ratio: float):
         """
         :param client: Broker client
-        :param ratio: Trade ratio, between 0 and 1
+        :param trade_ratio: Trade ratio, between 0 and 1
 
         Note: Try to avoid ratio values close to 0 or 1.
         """
-        super().__init__(ratio)
+        super().__init__(trade_ratio)
         self.client = client
-
-    def create_orders_by_ratio(self, balance: Balance, *orders: Order) -> List[Order]:
-        # self.ratio
-        # TODO: Implementation
-        pass
 
     def create_orders(self, *orders: Order) -> List[Order]:
         """
@@ -35,34 +34,6 @@ class BinanceFuturesTrader(FuturesTrader):
     def create_order(self, order: Order) -> Order:
         order = self.client.futures_create_order(**order.to_binance_order())
         return Order.from_binance(order)
-
-    def create_position_close_order(
-        self,
-        position: Position,
-        price: float = None,
-        time_in_force: Union[str, TimeInForce] = "GTC",
-    ) -> Order:
-        """
-        Creates an order against the position by negating the position quantity.
-        If price is null a market order, otherwise a limit order gets created.
-        time_in_force must not be None when price is provided.
-        """
-
-        if price is None:
-            order = Order.market(position.symbol, quantity=-position.quantity)
-        elif price is not None and time_in_force is not None:
-            order = Order.limit(
-                position.symbol,
-                quantity=-position.quantity,
-                price=price,
-                time_in_force=time_in_force,
-            )
-        else:
-            raise ValueError(
-                "Parameter 'time_in_force' must not be None if 'price' is not None"
-            )
-
-        return self.create_order(order)
 
     def cancel_orders(self, *orders: Order) -> List[Order]:
         return [
@@ -81,18 +52,18 @@ class BinanceFuturesTrader(FuturesTrader):
         open_orders: List[Dict] = self.client.futures_get_open_orders(symbol=symbol)
         return [Order.from_binance(order) for order in open_orders]
 
-    def get_balances(self) -> List[Balance]:
+    def get_balances(self) -> Dict[str, Balance]:
         balances: List[Dict] = self.client.futures_account_balance()
 
-        return [
-            Balance(
+        return {
+            balance["asset"]: Balance(
                 asset=balance["asset"],
                 balance=balance["balance"],
                 free=balance["withdrawAvailable"],
             )
             for balance in balances
             if float(balance["balance"]) > 0.0
-        ]
+        }
 
     def get_positions(self) -> List[Position]:
         positions: List[Dict] = self.client.futures_account()["positions"]

@@ -35,7 +35,7 @@ mode: backtest
 trader:
   # 'ratio': > 0 and < 1
   # Note: Avoid values close to 0 and 1.
-  ratio: 0.9
+  trade_ratio: 0.9
 
 strategy:
   # A class which is implemented in the strategy module

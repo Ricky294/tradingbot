@@ -5,7 +5,7 @@ import pandas as pd
 
 class Indicator(ABC):
     @abstractmethod
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, **data):
         pass
 
     @abstractmethod

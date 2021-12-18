@@ -45,12 +45,12 @@ def candles_with_trade_info(
     symbol: str,
     trader: FuturesTrader,
     candles: pd.DataFrame,
-    callback: Callable[[pd.DataFrame, SymbolTradeInfo, List[Balance]], any],
+    callback: Callable[[pd.DataFrame, SymbolTradeInfo, Dict[str, Balance]], any],
 ):
     from backtest import BacktestFuturesTrader
 
     if isinstance(trader, BacktestFuturesTrader):
-        trader.__call__({symbol: candles})
+        trader.__call__(candles)
 
     balances = trader.get_balances()
     position = trader.get_position(symbol=symbol)

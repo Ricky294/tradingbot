@@ -6,19 +6,20 @@ from strategy import SingleSymbolStrategy, MultiSymbolStrategy
 
 
 def backtest_candle_multi_stream(
-    candles: Dict[str, pd.DataFrame],
+    symbol_candles_dict: Dict[str, pd.DataFrame],
     strategy: MultiSymbolStrategy,
     trader,
     skip: int = 0,
 ):
-    """
-    Simulates continuous data creation.
-    """
+    symbols = tuple(symbol_candles_dict.keys())
 
-    for i in range(skip, len(candles)):
-        candles_head = candles.head(i + 1)
-        trader({strategy.symbols})
-        strategy(candles_head)
+    for i in range(skip, len(symbol_candles_dict)):
+        candles_head = {
+            symbol: symbol_candles_dict[symbol].head(i + 1) for symbol in symbols
+        }
+
+        trader(symbol_candles_dict)
+        strategy(candle=None, candles=candles_head)
 
 
 def backtest_candle_stream(
@@ -27,12 +28,9 @@ def backtest_candle_stream(
     trader,
     skip: int = 0,
     *args,
-    **kwargs,
+    **data,
 ):
-    """
-    Simulates continuous data creation.
-    """
     for i in range(skip, len(candles)):
         candles_head = candles.head(i + 1)
-        trader({strategy.symbol: candles_head})
+        trader(candles_head)
         strategy(candles_head)

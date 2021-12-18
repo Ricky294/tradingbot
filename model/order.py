@@ -87,6 +87,18 @@ class ClosePosition(Enum):
 
 # Docs: https://binance-docs.github.io/apidocs/futures/en/#new-order-trade
 class Order:
+
+    __slots__ = (
+        "symbol",
+        "type",
+        "quantity",
+        "price",
+        "stop_price",
+        "time_in_force",
+        "id",
+        "status",
+    )
+
     def __init__(
         self,
         symbol: Union[SymbolInfo, str],
@@ -112,13 +124,6 @@ class Order:
             self.price = price
             self.stop_price = stop_price
 
-        if isinstance(quantity, ClosePosition):
-            self.side = str(quantity)
-        elif quantity > 0:
-            self.side = "BUY"
-        else:
-            self.side = "SELL"
-
         self.type = str(type).upper()
 
         self.time_in_force = None
@@ -127,6 +132,24 @@ class Order:
 
         self.id = id
         self.status = status
+
+    def __eq__(self, other):
+        if other is Order:
+            return self.id == other.id
+        return False
+
+    @property
+    def side(self):
+        if isinstance(self.quantity, ClosePosition):
+            return str(self.quantity)
+        elif self.quantity > 0:
+            return "BUY"
+        else:
+            return "SELL"
+
+    @property
+    def is_limit(self):
+        return self.type in ("LIMIT", "TAKE_PROFIT", "STOP")
 
     @classmethod
     def from_binance(cls, data: dict):

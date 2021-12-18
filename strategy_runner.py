@@ -4,6 +4,7 @@ import pandas as pd
 
 from typing import Dict, Union, Callable
 
+from binance.client import Client
 from crypto_data.binance.candle import StreamCandle
 
 from abstract import FuturesTrader
@@ -96,11 +97,12 @@ class StrategyRunner:
 class BacktestRunner(StrategyRunner):
     @classmethod
     def from_config(cls, config: Dict[str, any], candles: pd.DataFrame, skip: int = 0):
-        from backtest import BacktestClient
         from backtest import BacktestFuturesTrader
 
-        client = BacktestClient()
-        trader = BacktestFuturesTrader(client=client, **config["trader"])
+        client = Client()
+        trader = BacktestFuturesTrader(
+            client=client, interval=config["interval"], **config["trader"]
+        )
 
         backtest_indicators = create_backtest_indicators(
             config["indicators"], candles=candles, skip=skip
@@ -133,7 +135,7 @@ class BacktestRunner(StrategyRunner):
             backtest_candle_multi_stream(
                 strategy=self.strategy,
                 trader=self.strategy.trader,
-                candles=self.candles,
+                symbol_candles_dict=self.candles,
                 skip=skip,
             )
         else:

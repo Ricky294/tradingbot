@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from typing import List, Optional
+from typing import List, Optional, Dict
 
 from model import Position, Order, Balance, SymbolInfo
 
@@ -10,18 +10,14 @@ class TradeError(Exception):
 
 
 class FuturesTrader(ABC):
-    def __init__(self, ratio: float):
-        if ratio <= 0.0 or ratio >= 1.0:
+    def __init__(self, trade_ratio: float):
+        if trade_ratio <= 0.0 or trade_ratio >= 1.0:
             raise TradeError("'ratio' must be between 0 and 1")
 
-        self.ratio = ratio
+        self.trade_ratio = trade_ratio
 
     @abstractmethod
     def cancel_orders(self, symbol: str) -> List[Order]:
-        pass
-
-    @abstractmethod
-    def create_position_close_order(self, position: Position) -> Order:
         pass
 
     @abstractmethod
@@ -29,11 +25,7 @@ class FuturesTrader(ABC):
         pass
 
     @abstractmethod
-    def create_orders_by_ratio(self, balance: Balance, *orders: Order) -> List[Order]:
-        pass
-
-    @abstractmethod
-    def get_balances(self) -> List[Balance]:
+    def get_balances(self) -> Dict[str, Balance]:
         pass
 
     @abstractmethod
@@ -49,5 +41,9 @@ class FuturesTrader(ABC):
         pass
 
     @abstractmethod
-    def set_leverage(self, symbol: str, leverage: int):
+    def set_leverage(self, symbol: str, leverage: int) -> None:
+        pass
+
+    @abstractmethod
+    def get_leverage(self, symbol) -> int:
         pass

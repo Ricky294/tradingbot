@@ -18,14 +18,14 @@ class Strategy(Callable):
 class SingleSymbolStrategy(Strategy):
     def __init__(self, symbol: str, trader: FuturesTrader):
         self.trader = trader
-        self.symbol = symbol
+        self.symbol = symbol.upper()
 
     @abstractmethod
     def on_candle(
         self,
         candles: pd.DataFrame,
         symbol_trade_info: SymbolTradeInfo,
-        balances: List[Balance],
+        balances: Dict[str, Balance],
     ):
         pass
 
@@ -44,7 +44,7 @@ class SingleSymbolStrategy(Strategy):
 class MultiSymbolStrategy(Strategy):
     def __init__(self, symbols: List[str], trader: FuturesTrader):
         self.trader = trader
-        self.symbols = symbols
+        self.symbols = [symbol.upper() for symbol in symbols]
 
     @abstractmethod
     def on_candle(

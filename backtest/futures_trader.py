@@ -1,10 +1,16 @@
-from typing import List, Callable, Dict
+import copy
+from typing import List, Callable, Optional
 
+import numpy as np
 import pandas as pd
 
+from binance.client import Client
+from crypto_data.binance.schema import CLOSE_PRICE, OPEN_TIME, HIGH_PRICE, LOW_PRICE
+
 from abstract import FuturesTrader
-from backtest import BacktestClient
-from model import Balance, Order, Position
+from model import Balance, Order, SymbolInfo
+from numpy_util import mask_match
+from util import interval_to_seconds
 
 
 class TradeError(Exception):
@@ -12,44 +18,262 @@ class TradeError(Exception):
         self.msg = msg
 
 
+class NotEnoughFundsError(Exception):
+    def __init__(self, msg):
+        self.msg = msg
+
+
+class BacktestPosition:
+    __slots__ = ("time", "price", "quantity", "leverage", "exit_time", "exit_price")
+
+    def __init__(self, time: int, price: float, quantity: float, leverage: int):
+        self.time = time
+        self.price = price
+        self.quantity = quantity
+        self.leverage = leverage
+        self.exit_time: Optional[int] = None
+        self.exit_price: Optional[float] = None
+
+    @property
+    def side(self):
+        return "BUY" if self.quantity > 0 else "SELL"
+
+    def set_exit(self, time: int, price: float):
+        self.exit_time = time
+        self.exit_price = price
+
+    @property
+    def exit_profit(self):
+        return (self.exit_price - self.price) * self.quantity * self.leverage
+
+
+def create_trade_result_df(
+    open_time: np.ndarray,
+    entry_time: np.ndarray,
+    exit_time: np.ndarray,
+    close_prices: np.ndarray,
+    profits: np.ndarray,
+    starting_capital: float,
+) -> pd.DataFrame:
+    trade_result = pd.DataFrame()
+    trade_result["time"] = open_time
+    trade_result["close_price"] = close_prices
+
+    entry_time_mask = mask_match(open_time, entry_time)
+    exit_time_mask = mask_match(open_time, exit_time)
+
+    trade_result["entry_time"] = np.ma.masked_where(~entry_time_mask, open_time)
+    trade_result["exit_time"] = np.ma.masked_where(~exit_time_mask, open_time)
+
+    trade_result["profit"] = np.nan
+    trade_result["profit"].values[~np.isnan(trade_result["exit_time"].values)] = profits
+
+    trade_result["capital"] = np.nan
+    trade_result["capital"].values[~np.isnan(trade_result["exit_time"].values)] = (
+        np.cumsum(profits) + starting_capital
+    )
+
+    return trade_result
+
+
+def _is_limit_buy_hit(order: Order, low_price: float):
+    return order.side == "BUY" and low_price < order.price
+
+
+def _is_limit_sell_hit(order: Order, high_price: float):
+    return order.side == "SELL" and high_price > order.price
+
+
+def _is_stop_loss_hit(
+    order: Order, position: BacktestPosition, high_price: float, low_price: float
+):
+    return (
+        high_price > order.stop_price
+        if position.side == "SELL"
+        else low_price < order.stop_price
+    )
+
+
+def _is_take_profit_hit(
+    order: Order, position: BacktestPosition, high_price: float, low_price: float
+):
+    return (
+        high_price > order.stop_price
+        if position.side == "BUY"
+        else low_price < order.stop_price
+    )
+
+
 class BacktestFuturesTrader(FuturesTrader, Callable):
-    def __init__(self, client: BacktestClient, ratio: float):
+    def __init__(
+        self,
+        client: Client,
+        trade_ratio: float,
+        interval: str,
+        balance: Balance = Balance("USDT", balance=1_000, free=1_000),
+        fee_ratio=0.001,
+        leverage=1,
+    ):
         """
         :param client: Broker client
-        :param ratio: Trade ratio, between 0 and 1
+        :param trade_ratio: Trade ratio, between 0 and 1
 
         Note: Try to avoid ratio values close to 0 or 1.
         """
-        super().__init__(ratio)
+        super().__init__(trade_ratio)
+        self.fee_ratio = fee_ratio
         self.client = client
-        self.candles: Dict[str, pd.DataFrame]
+        self._interval = interval_to_seconds(interval)
 
-    def __call__(self, candles: Dict[str, pd.DataFrame]):
+        self._leverage = leverage
+
+        self.symbol_info = self._get_all_symbol_info()
+
+        self.initial_balance = copy.deepcopy(balance)
+        self.balance = balance
+
+        self.positions: List[BacktestPosition] = []
+        self.position: Optional[BacktestPosition] = None
+
+        self.take_profit_order: Optional[Order] = None
+        self.stop_order: Optional[Order] = None
+        self.limit_order: Optional[Order] = None
+
+    def __call__(self, candles: pd.DataFrame):
         self.candles = candles
 
-    def cancel_orders(self, symbol: str) -> List[Order]:
-        pass
+        if self.position is None and self.limit_order is not None:
+            latest_candle = candles.tail(1)
+            high_price = latest_candle[HIGH_PRICE].item()
+            low_price = latest_candle[LOW_PRICE].item()
+            open_time = latest_candle[OPEN_TIME].item()
 
-    def create_position_close_order(self, position: Position) -> Order:
-        pass
+            if _is_limit_sell_hit(
+                self.limit_order, high_price=high_price
+            ) or _is_limit_buy_hit(self.limit_order, low_price=low_price):
+                self.position = BacktestPosition(
+                    time=open_time,
+                    quantity=self.limit_order.quantity,
+                    leverage=self._leverage,
+                    price=self.limit_order.price,
+                )
+                self.limit_order = None
 
-    def create_orders(self, *orders: Order) -> List[Order]:
-        pass
+        elif self.position is not None:
+            latest_candle = candles.tail(1)
+            high_price = latest_candle[HIGH_PRICE].item()
+            low_price = latest_candle[LOW_PRICE].item()
+            open_time = latest_candle[OPEN_TIME].item()
 
-    def create_orders_by_ratio(self, balance: Balance, *orders: Order) -> List[Order]:
-        pass
+            close_price = latest_candle.close_price.item()
+            open_price = latest_candle.open_price.item()
+
+            tp_hit = self.take_profit_order is not None and _is_take_profit_hit(
+                order=self.take_profit_order,
+                position=self.position,
+                high_price=high_price,
+                low_price=low_price,
+            )
+
+            sl_hit = self.stop_order is not None and _is_stop_loss_hit(
+                order=self.stop_order,
+                position=self.position,
+                high_price=high_price,
+                low_price=low_price,
+            )
+
+            exit_time = open_time + self._interval
+            if tp_hit and sl_hit:
+                print(
+                    "WARNING: Both take profit and loss has been hit in the same iteration!"
+                )
+                is_bullish_candle = close_price > open_price
+                if (is_bullish_candle and self.position.side == "BUY") or (
+                    not is_bullish_candle and self.position.side == "SELL"
+                ):
+                    self._take_profit_or_loss(self.take_profit_order, exit_time)
+                else:
+                    self._take_profit_or_loss(self.stop_order, exit_time)
+            elif tp_hit:
+                self._take_profit_or_loss(self.take_profit_order, exit_time)
+            elif sl_hit:
+                self._take_profit_or_loss(self.stop_order, exit_time)
+                if self.balance <= 0:
+                    raise NotEnoughFundsError(
+                        f"You got liquidated! Final balance: {self.balance}"
+                    )
+
+    def _take_profit_or_loss(self, order: Order, exit_time: int):
+        if self.position is not None:
+            self.position.set_exit(time=exit_time, price=order.stop_price)
+            self.balance += self.position.exit_profit
+            if order.type == "TAKE_PROFIT_MARKET":
+                self.take_profit_order = None
+            else:
+                self.stop_order = None
+
+            self.positions.append(self.position)
+            self.position = None
+
+    def cancel_orders(self, symbol: str):
+        self.limit_order = None
+        self.take_profit_order = None
+        self.stop_order = None
+
+    def create_orders(self, *orders: Order):
+        for order in orders:
+            if order.type == "MARKET":
+                latest_candle = self.candles.tail(1)
+                self.position = BacktestPosition(
+                    time=latest_candle[OPEN_TIME].item(),
+                    quantity=order.quantity,
+                    leverage=self._leverage,
+                    price=latest_candle[CLOSE_PRICE].item(),
+                )
+            elif order.type == "LIMIT":
+                latest_close = self.candles.tail(1)[CLOSE_PRICE].item()
+                if (order.side == "BUY" and order.price >= latest_close) or (
+                    order.side == "SELL" and order.price <= latest_close
+                ):
+                    raise ValueError(
+                        "Incorrect order price. Order would immediately triggered."
+                    )
+                self.limit_order = order
+            elif order.type == "TAKE_PROFIT_MARKET":
+                self.take_profit_order = order
+            elif order.type == "STOP_MARKET":
+                self.stop_order = order
 
     def get_balances(self):
-        pass
+        return {"USDT": self.balance}
 
     def get_open_orders(self, symbol: str):
-        pass
+        orders = []
+        if self.limit_order is not None:
+            orders.append(self.limit_order)
+        if self.take_profit_order is not None:
+            orders.append(self.take_profit_order)
+        if self.stop_order is not None:
+            orders.append(self.stop_order)
+        return orders
 
-    def get_symbol_info(self, symbol: str):
-        pass
+    def _get_all_symbol_info(self):
+        exchange_info: dict = self.client.futures_exchange_info()
+        return {
+            symbol_info["symbol"]: SymbolInfo(**symbol_info)
+            for symbol_info in exchange_info["symbols"]
+        }
 
-    def get_position(self, symbol: str):
-        pass
+    def get_symbol_info(self, symbol: str) -> Optional[SymbolInfo]:
+        symbol = symbol.upper()
+
+        return self.symbol_info[symbol]
+
+    def get_position(self, symbol: str) -> Optional[BacktestPosition]:
+        return self.position
 
     def set_leverage(self, symbol: str, leverage: int):
-        pass
+        self._leverage = leverage
+
+    def get_leverage(self, symbol) -> int:
+        return self._leverage

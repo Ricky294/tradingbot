@@ -68,3 +68,24 @@ logical_operators = {
 
 def compare(left_value, logical_operator, right_value):
     return logical_operators[logical_operator](left_value, right_value)
+
+
+def interval_to_seconds(interval: str):
+
+    time = int(interval[0 : len(interval) - 1])
+    metric = interval[-1]
+
+    if metric.lower() == "s":
+        return time
+    elif metric == "m":
+        return time * 60
+    elif metric.lower() == "h":
+        return time * 3600
+    elif metric.lower() == "d":
+        return time * 86400
+    elif metric.lower() == "w":
+        return time * 604800
+    elif metric == "M":
+        return time * 2629800
+    elif metric.lower() == "y":
+        return time * 31557600

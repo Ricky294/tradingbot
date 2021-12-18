@@ -30,3 +30,20 @@ def cross_signal(
         (np.array(bool_sliding_array) == [False, True]), 0, first_value, axis=0
     )
     return x.all(axis=-1)
+
+
+def map_match(src, tar):
+    src_size = np.shape(src)[0]
+    tar_size = np.shape(tar)[0]
+    src_mat = src[:, np.newaxis]
+    tar_mat = np.reshape(np.tile(tar, src_size), newshape=(src_size, tar_size))
+    mask = np.sum(np.equal(src_mat, tar_mat), axis=-1)
+    return src * mask
+
+
+def mask_match(src, tar):
+    src_size = np.shape(src)[0]
+    tar_size = np.shape(tar)[0]
+    src_mat = src[:, np.newaxis]
+    tar_mat = np.reshape(np.tile(tar, src_size), newshape=(src_size, tar_size))
+    return np.any(np.equal(src_mat, tar_mat), axis=-1)

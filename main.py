@@ -1,9 +1,14 @@
 from typing import Dict, Optional, Union
 
+import numpy as np
 import pandas as pd
 from crypto_data.binance.extract import Limit
+from crypto_data.binance.schema import OPEN_TIME, CLOSE_PRICE
 from crypto_data.shared.candle_db import CandleDB
 
+from backtest import BacktestFuturesTrader
+from backtest.futures_trader import create_trade_result_df
+from plotter import plot_trade_result
 from strategy_runner import BinanceRunner, BacktestRunner
 from util import read_config
 
@@ -42,8 +47,15 @@ def get_candles_from_config(
     return {symbol: get_candles(symbol=symbol) for symbol in symbols}
 
 
-def run_binance_strategy_from_config():
+def run_strategy_from_config():
     config = read_config("configs/trading_bot_config.yaml")
+    if config["mode"] == "backtest":
+        run_backtest_strategy_from_config(config)
+    elif config["mode"] == "binance":
+        run_binance_strategy_from_config(config)
+
+
+def run_binance_strategy_from_config(config: dict):
     binance_keys = read_config("configs/binance_secrets.json")
 
     candles = get_candles_from_config(config)
@@ -57,17 +69,31 @@ def run_binance_strategy_from_config():
     runner.run(on_candle=lambda c: print(c))
 
 
-def run_backtest_strategy_from_config():
-    config = read_config("configs/trading_bot_config.yaml")
-
+def run_backtest_strategy_from_config(config: dict):
     candles = get_candles_from_config(config)
 
     runner = BacktestRunner.from_config(
         candles=candles,
         config=config,
     )
-    runner.run()
+
+    if isinstance(runner.strategy.trader, BacktestFuturesTrader):
+        positions = runner.strategy.trader.positions
+
+        profits = np.array(tuple(position.exit_profit for position in positions))
+        exit_time = np.array(tuple(position.exit_time for position in positions))
+        entry_time = np.array(tuple(position.time for position in positions))
+
+        df = create_trade_result_df(
+            open_time=candles[OPEN_TIME].values,
+            exit_time=exit_time,
+            entry_time=entry_time,
+            close_prices=candles[CLOSE_PRICE].values,
+            profits=profits,
+            starting_capital=1000,
+        )
+        plot_trade_result(df)
 
 
 if __name__ == "__main__":
-    run_backtest_strategy_from_config()
+    run_strategy_from_config()
