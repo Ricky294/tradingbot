@@ -2,15 +2,14 @@ import copy
 from typing import List, Callable, Optional
 
 import numpy as np
-import pandas as pd
 
 from binance.client import Client
-from crypto_data.binance.schema import CLOSE_PRICE, OPEN_TIME, HIGH_PRICE, LOW_PRICE
 
 from abstract import FuturesTrader
+from consts.actions import SELL, BUY
+from consts.candle_column_index import *
 from model import Balance, Order, SymbolInfo
-from numpy_util import mask_match
-from util import interval_to_seconds
+from util.common import interval_to_seconds
 
 
 class TradeError(Exception):
@@ -36,7 +35,7 @@ class BacktestPosition:
 
     @property
     def side(self):
-        return "BUY" if self.quantity > 0 else "SELL"
+        return BUY if self.quantity > 0 else SELL
 
     def set_exit(self, time: int, price: float):
         self.exit_time = time
@@ -47,49 +46,23 @@ class BacktestPosition:
         return (self.exit_price - self.price) * self.quantity * self.leverage
 
 
-def create_trade_result_df(
-    open_time: np.ndarray,
-    entry_time: np.ndarray,
-    exit_time: np.ndarray,
-    close_prices: np.ndarray,
-    profits: np.ndarray,
-    starting_capital: float,
-) -> pd.DataFrame:
-    trade_result = pd.DataFrame()
-    trade_result["time"] = open_time
-    trade_result["close_price"] = close_prices
-
-    entry_time_mask = mask_match(open_time, entry_time)
-    exit_time_mask = mask_match(open_time, exit_time)
-
-    trade_result["entry_time"] = np.ma.masked_where(~entry_time_mask, open_time)
-    trade_result["exit_time"] = np.ma.masked_where(~exit_time_mask, open_time)
-
-    trade_result["profit"] = np.nan
-    trade_result["profit"].values[~np.isnan(trade_result["exit_time"].values)] = profits
-
-    trade_result["capital"] = np.nan
-    trade_result["capital"].values[~np.isnan(trade_result["exit_time"].values)] = (
-        np.cumsum(profits) + starting_capital
-    )
-
-    return trade_result
-
-
 def _is_limit_buy_hit(order: Order, low_price: float):
-    return order.side == "BUY" and low_price < order.price
+    return order.side == BUY and low_price < order.price
 
 
 def _is_limit_sell_hit(order: Order, high_price: float):
-    return order.side == "SELL" and high_price > order.price
+    return order.side == SELL and high_price > order.price
 
 
 def _is_stop_loss_hit(
-    order: Order, position: BacktestPosition, high_price: float, low_price: float
+        order: Order,
+        position: BacktestPosition,
+        high_price: float,
+        low_price: float
 ):
     return (
         high_price > order.stop_price
-        if position.side == "SELL"
+        if position.side == SELL
         else low_price < order.stop_price
     )
 
@@ -99,7 +72,7 @@ def _is_take_profit_hit(
 ):
     return (
         high_price > order.stop_price
-        if position.side == "BUY"
+        if position.side == BUY
         else low_price < order.stop_price
     )
 
@@ -108,8 +81,8 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
     def __init__(
         self,
         client: Client,
-        trade_ratio: float,
         interval: str,
+        trade_ratio: float,
         balance: Balance = Balance("USDT", balance=1_000, free=1_000),
         fee_ratio=0.001,
         leverage=1,
@@ -139,14 +112,14 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         self.stop_order: Optional[Order] = None
         self.limit_order: Optional[Order] = None
 
-    def __call__(self, candles: pd.DataFrame):
+    def __call__(self, candles: np.ndarray):
         self.candles = candles
+        latest_candle = candles[-1]
+        high_price = latest_candle[HIGH_PRICE_INDEX]
+        low_price = latest_candle[LOW_PRICE_INDEX]
+        open_time = latest_candle[OPEN_TIME_INDEX]
 
         if self.position is None and self.limit_order is not None:
-            latest_candle = candles.tail(1)
-            high_price = latest_candle[HIGH_PRICE].item()
-            low_price = latest_candle[LOW_PRICE].item()
-            open_time = latest_candle[OPEN_TIME].item()
 
             if _is_limit_sell_hit(
                 self.limit_order, high_price=high_price
@@ -160,13 +133,8 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
                 self.limit_order = None
 
         elif self.position is not None:
-            latest_candle = candles.tail(1)
-            high_price = latest_candle[HIGH_PRICE].item()
-            low_price = latest_candle[LOW_PRICE].item()
-            open_time = latest_candle[OPEN_TIME].item()
-
-            close_price = latest_candle.close_price.item()
-            open_price = latest_candle.open_price.item()
+            close_price = latest_candle[CLOSE_PRICE_INDEX]
+            open_price = latest_candle[OPEN_PRICE_INDEX]
 
             tp_hit = self.take_profit_order is not None and _is_take_profit_hit(
                 order=self.take_profit_order,
@@ -188,8 +156,8 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
                     "WARNING: Both take profit and loss has been hit in the same iteration!"
                 )
                 is_bullish_candle = close_price > open_price
-                if (is_bullish_candle and self.position.side == "BUY") or (
-                    not is_bullish_candle and self.position.side == "SELL"
+                if (is_bullish_candle and self.position.side == BUY) or (
+                    not is_bullish_candle and self.position.side == SELL
                 ):
                     self._take_profit_or_loss(self.take_profit_order, exit_time)
                 else:
@@ -223,17 +191,17 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
     def create_orders(self, *orders: Order):
         for order in orders:
             if order.type == "MARKET":
-                latest_candle = self.candles.tail(1)
+                latest_candle = self.candles[-1]
                 self.position = BacktestPosition(
-                    time=latest_candle[OPEN_TIME].item(),
+                    time=latest_candle[OPEN_TIME_INDEX],
                     quantity=order.quantity,
                     leverage=self._leverage,
-                    price=latest_candle[CLOSE_PRICE].item(),
+                    price=latest_candle[CLOSE_PRICE_INDEX],
                 )
             elif order.type == "LIMIT":
-                latest_close = self.candles.tail(1)[CLOSE_PRICE].item()
-                if (order.side == "BUY" and order.price >= latest_close) or (
-                    order.side == "SELL" and order.price <= latest_close
+                latest_close = self.candles[-1][CLOSE_PRICE_INDEX]
+                if (order.side == BUY and order.price >= latest_close) or (
+                    order.side == SELL and order.price <= latest_close
                 ):
                     raise ValueError(
                         "Incorrect order price. Order would immediately triggered."

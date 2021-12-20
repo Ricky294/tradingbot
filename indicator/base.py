@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 
+import numpy as np
 import pandas as pd
 
 
@@ -9,5 +10,5 @@ class Indicator(ABC):
         pass
 
     @abstractmethod
-    def result(self, candle_df: pd.DataFrame) -> pd.DataFrame:
+    def result(self, candle_df: np.ndarray) -> pd.DataFrame:
         pass

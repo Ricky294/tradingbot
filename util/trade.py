@@ -1,21 +1,18 @@
 from typing import Union
 
+from consts.actions import BUY, SELL
 from model import Position
 from model.balance import Balance
 from model.order import OrderSide, OrderError, Order
 
 
-def flip_side(side: str):
-    return "SELL" if side == "BUY" else "SELL"
-
-
 def calculate_quantity(
-    side: str, balance: Balance, price: float, percentage: float, leverage: int = 1
+    side: int, balance: Balance, price: float, percentage: float, leverage: int = 1
 ):
     # Be cautious! It's only works if you do not have ANY open orders/positions in place.
     # If you have open orders/position you need a more complex calculation considering other factors as well.
     quantity = balance.free / price * percentage * leverage
-    return quantity if side == "BUY" else -quantity
+    return quantity if side == BUY else -quantity
 
 
 def calculate_profit(order: Order, position: Position, leverage: int):
@@ -26,7 +23,7 @@ def calculate_pnl(
     entry_price: float,
     exit_price: float,
     quantity: float,
-    side: Union[OrderSide, str],
+    side: Union[OrderSide, int],
     leverage: int = 1,
 ):
     """
@@ -35,9 +32,9 @@ def calculate_pnl(
 
     side = str(side).upper()
 
-    if side == "BUY":
+    if side == BUY:
         pnl = (exit_price - entry_price) * quantity
-    elif side == "SELL":
+    elif side == SELL:
         pnl = (entry_price - exit_price) * quantity
     else:
         raise OrderError.side()
@@ -55,9 +52,9 @@ def calculate_target_price(
 
     side = str(side).upper()
 
-    if side == "BUY":
+    if side == BUY:
         return entry_price + diff
-    elif side == "SELL":
+    elif side == SELL:
         return entry_price - diff
 
 

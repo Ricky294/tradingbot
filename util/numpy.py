@@ -2,7 +2,7 @@ from typing import Union
 
 import numpy as np
 
-from util import compare
+from util.common import compare
 
 
 def cross_signal(
@@ -47,3 +47,10 @@ def mask_match(src, tar):
     src_mat = src[:, np.newaxis]
     tar_mat = np.reshape(np.tile(tar, src_size), newshape=(src_size, tar_size))
     return np.any(np.equal(src_mat, tar_mat), axis=-1)
+
+
+def fill_zeros_with_last(arr: np.ndarray):
+    prev = np.arange(len(arr))
+    prev[arr == 0] = 0
+    prev = np.maximum.accumulate(prev)
+    return arr[prev]

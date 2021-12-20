@@ -1,8 +1,10 @@
 from enum import Enum
 from typing import Union, Dict
 
+from consts import actions
+from consts.actions import BUY, SELL
 from model.symbol_info import SymbolInfo
-from util import remove_none, round_down, generate_ascii, generate_random_string
+from util.generic import remove_none, round_down, generate_ascii, generate_random_string
 
 
 def generate_client_order_id() -> str:
@@ -16,8 +18,8 @@ def generate_client_order_id() -> str:
 
 
 class OrderSide(Enum):
-    BUY = "BUY"
-    SELL = "SELL"
+    BUY = actions.BUY
+    SELL = actions.SELL
 
     def __str__(self):
         return self.value
@@ -78,8 +80,8 @@ class OrderError(Exception):
 
 
 class ClosePosition(Enum):
-    SELL = "SELL"
-    BUY = "BUY"
+    SELL = actions.SELL
+    BUY = actions.BUY
 
     def __str__(self):
         return self.value
@@ -143,9 +145,9 @@ class Order:
         if isinstance(self.quantity, ClosePosition):
             return str(self.quantity)
         elif self.quantity > 0:
-            return "BUY"
+            return BUY
         else:
-            return "SELL"
+            return SELL
 
     @property
     def is_limit(self):

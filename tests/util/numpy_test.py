@@ -1,6 +1,6 @@
 import numpy as np
 
-from numpy_util import cross_signal
+from util.numpy import cross_signal
 
 
 def test_nan_cross_signal():

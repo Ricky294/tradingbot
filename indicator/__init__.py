@@ -1,7 +1,7 @@
 # nopycln: file
 
-from .base_indicator import Indicator
-from .atr_indicator import ATRIndicator
-from .macd_indicator import MACDIndicator
-from .ma_cross_indicator import MACrossIndicator, MAType
-from .rsi_indicator import RSIIndicator
+from .base import Indicator
+from .atr import ATRIndicator
+from .macd import MACDIndicator
+from .ma_cross import MACrossIndicator, MAType
+from .rsi import RSIIndicator
