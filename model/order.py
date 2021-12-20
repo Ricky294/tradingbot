@@ -4,7 +4,7 @@ from typing import Union, Dict
 from consts import actions
 from consts.actions import BUY, SELL
 from model.symbol_info import SymbolInfo
-from util.generic import remove_none, round_down, generate_ascii, generate_random_string
+from util.common import remove_none, round_down, generate_ascii, generate_random_string
 
 
 def generate_client_order_id() -> str:

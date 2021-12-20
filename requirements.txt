@@ -1,6 +1,8 @@
+--find-links https://download.pytorch.org/whl/cu113/torch_stable.html
 git+https://github.com/Ricky294/cryptodata.git@develop
 numpy
 pandas
 python-binance
 pyyaml
 ta-lib
+torch==1.10.1+cu113

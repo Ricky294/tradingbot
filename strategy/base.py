@@ -1,8 +1,7 @@
 from abc import abstractmethod
-from typing import List, Dict, Callable
+from typing import Dict, Callable
 
 import numpy as np
-import pandas as pd
 from crypto_data.binance.candle import StreamCandle
 from crypto_data.binance.stream import candle_stream
 

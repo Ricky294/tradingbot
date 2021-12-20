@@ -1,4 +1,5 @@
 # nopycln: file
 
-from .base_strategy import Strategy, SingleSymbolStrategy, MultiSymbolStrategy
-from .rsi_strategy import RSIStrategy
+from .base import Strategy
+from .rsi import RSIStrategy
+from .ai import AIStrategy

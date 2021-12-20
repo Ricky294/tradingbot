@@ -5,7 +5,7 @@ from crypto_data.binance.schema import *
 from crypto_data.shared.candle_db import CandleDB
 
 from backtest import BacktestFuturesTrader, BacktestIndicator
-from backtest.futures_trader import extend_data
+from plot.transform import extend_data
 from consts.candle_column_index import (
     OPEN_TIME_INDEX,
     CLOSE_PRICE_INDEX,
@@ -17,7 +17,7 @@ from consts.candle_column_index import (
 from plot.plotly import create_plots
 from indicator import RSIIndicator
 from strategy import RSIStrategy
-from util.generic import read_config
+from util.common import read_config
 
 
 def run_backtest():
@@ -45,17 +45,11 @@ def run_backtest():
     rsi_indicator = RSIIndicator()
     backtest_indicator = BacktestIndicator(candles=candles, indicator=rsi_indicator, skip=skip)
 
-    # strategy = AIStrategy(
-    #     symbol=symbol,
-    #     trader=trader,
-    # )
-
     strategy = RSIStrategy(
         symbol=symbol,
         trader=trader,
         rsi_indicator=backtest_indicator,
     )
-    # candles = candles[int(0.7 * len(candles)):]
     strategy.run_backtest(candles=candles, skip=skip)
 
     if isinstance(strategy.trader, BacktestFuturesTrader):
