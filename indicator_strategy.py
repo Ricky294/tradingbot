@@ -12,7 +12,7 @@ from consts.candle_column_index import (
     VOLUME_INDEX,
     HIGH_PRICE_INDEX,
     LOW_PRICE_INDEX,
-    OPEN_PRICE_INDEX
+    OPEN_PRICE_INDEX,
 )
 from plot.plotly import create_plots
 from indicator import RSIIndicator
