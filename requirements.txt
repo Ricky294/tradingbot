@@ -6,3 +6,5 @@ python-binance
 pyyaml
 ta-lib
 torch==1.10.1+cu113
+plotly
+dash

@@ -9,6 +9,18 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 
+from backtest import BacktestFuturesTrader
+from consts.candle_column_index import (
+    OPEN_TIME_INDEX,
+    OPEN_PRICE_INDEX,
+    HIGH_PRICE_INDEX,
+    LOW_PRICE_INDEX,
+    CLOSE_PRICE_INDEX,
+    VOLUME_INDEX,
+)
+from plot.transform import extend_data
+
+
 def __create_custom_data(*arrays: np.ndarray):
     return np.stack(tuple(arrays), axis=-1)
 
@@ -135,6 +147,42 @@ def create_plots(
         )
 
     return fig
+
+
+def plot_backtest_results(
+        candles: np.ndarray,
+        trader: BacktestFuturesTrader,
+        candlestick_plot=False,
+        volume_bar_plot=False,
+):
+    positions = trader.positions
+
+    candles_T = candles.T
+    extended_data = extend_data(
+        open_time=candles_T[OPEN_TIME_INDEX],
+        entry_time=np.array(tuple(position.time for position in positions)),
+        entry_price=np.array(tuple(position.price for position in positions)),
+        exit_time=np.array(tuple(position.exit_time for position in positions)),
+        exit_price=np.array(tuple(position.exit_price for position in positions)),
+        profit=np.array(tuple(position.exit_profit for position in positions)),
+        quantity=np.array(tuple(position.quantity for position in positions)),
+        side=np.array(tuple(position.side for position in positions)),
+        starting_capital=trader.initial_balance.balance,
+    )
+
+    fig = create_plots(
+        open_time=candles_T[OPEN_TIME_INDEX],
+        open_price=candles_T[OPEN_PRICE_INDEX],
+        high_price=candles_T[HIGH_PRICE_INDEX],
+        low_price=candles_T[LOW_PRICE_INDEX],
+        close_price=candles_T[CLOSE_PRICE_INDEX],
+        volume=candles_T[VOLUME_INDEX],
+        candlestick_plot=candlestick_plot,
+        volume_bar_plot=volume_bar_plot,
+        **extended_data,
+    )
+
+    fig.show()
 
 
 def create_dash_app(fig):

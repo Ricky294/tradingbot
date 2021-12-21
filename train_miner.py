@@ -2,7 +2,7 @@ import math
 
 import numpy as np
 import torch as pt
-from crypto_data.binance.extract import get_candles
+from crypto_data.binance.pd.extract import get_candles
 from crypto_data.binance.schema import *
 from crypto_data.shared.candle_db import CandleDB
 from torch.nn.modules.loss import CrossEntropyLoss

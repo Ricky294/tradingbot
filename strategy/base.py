@@ -1,9 +1,9 @@
 from abc import abstractmethod
-from typing import Dict, Callable
+from typing import Dict, Callable, List
 
 import numpy as np
 from crypto_data.binance.candle import StreamCandle
-from crypto_data.binance.stream import candle_stream
+from crypto_data.binance.np.stream import candle_stream
 
 from abstract import FuturesTrader, candles_with_trade_info
 
@@ -33,30 +33,4 @@ class Strategy(Callable):
             trader=self.trader,
             candles=candles,
             callback=self.on_candle,
-        )
-
-    def run_backtest(self, candles: np.ndarray, skip=0):
-        from backtest import backtest_candle_stream
-        backtest_candle_stream(
-            candles=candles,
-            strategy=self,
-            trader=self.trader,
-            skip=skip,
-        )
-
-    def run_live(
-            self,
-            interval: str,
-            market: str,
-            candles: np.ndarray,
-            on_candle: Callable[[StreamCandle], any],
-            on_candle_close: Callable[[np.ndarray], any]
-    ):
-        candle_stream(
-            symbol=self.symbol,
-            interval=interval,
-            market=market,
-            candles=candles,
-            on_candle=on_candle,
-            on_candle_close=on_candle_close,
         )

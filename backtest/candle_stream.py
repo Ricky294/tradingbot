@@ -3,7 +3,7 @@ import numpy as np
 from strategy import Strategy
 
 
-def backtest_candle_stream(
+def run_backtest(
     candles: np.ndarray,
     strategy: Strategy,
     trader,
