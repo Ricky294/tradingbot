@@ -162,4 +162,3 @@ for epoch in range(epochs):
 
     if (epoch + 1) % save_freq == 0:
         save_model(model, optimizer)
-

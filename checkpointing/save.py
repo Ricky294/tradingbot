@@ -1,5 +1,4 @@
 import torch as pt
-
 from torch.nn import Module
 from torch.optim import Optimizer
 
@@ -17,5 +16,3 @@ def save_model(model: Module, optimizer: Optimizer):
         },
         checkpoint_path
     )
-
-    print("Model saved.")
