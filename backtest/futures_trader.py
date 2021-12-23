@@ -112,7 +112,6 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         client: Client,
         interval: str,
         trade_ratio: float,
-        hedge_mode=False,
         balance: Balance = Balance("USDT", balance=1_000, free=1_000),
         fee_ratio=0.001,
         leverage=1,
@@ -129,7 +128,7 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
 
         Note: Try to avoid ratio values close to 0 or 1.
         """
-        super().__init__(trade_ratio, hedge_mode)
+        super().__init__(trade_ratio)
         self.fee_ratio = fee_ratio
         self.client = client
         self._interval = interval_to_seconds(interval)
