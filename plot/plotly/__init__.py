@@ -8,8 +8,15 @@ from dash import html
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-
-from backtest import BacktestFuturesTrader
+from backtest.futures_trader import (
+     ENTRY_TIME_INDEX,
+     ENTRY_SIDE_INDEX,
+     ENTRY_PRICE_INDEX,
+     ENTRY_QUANTITY_INDEX,
+     EXIT_TIME_INDEX,
+     EXIT_PROFIT_INDEX,
+     EXIT_PRICE_INDEX
+)
 from consts.candle_column_index import (
     OPEN_TIME_INDEX,
     OPEN_PRICE_INDEX,
@@ -18,7 +25,8 @@ from consts.candle_column_index import (
     CLOSE_PRICE_INDEX,
     VOLUME_INDEX,
 )
-from plot.transform import extend_data
+from plot.transform import assign_where_not_zero
+from util.numpy import map_match
 
 
 def __create_custom_data(*arrays: np.ndarray):
@@ -26,11 +34,25 @@ def __create_custom_data(*arrays: np.ndarray):
 
 
 def create_plots(
-        open_time, open_price, close_price, volume,
-        profit, capital, entry_time, entry_price, exit_time, exit_price, side, quantity,
-        high_price=None, low_price=None,
-        candlestick_plot=True, volume_bar_plot=True
+        candles: np.ndarray,
+
+        profit: np.ndarray,
+        capital: np.ndarray,
+        entry_time: np.ndarray,
+        entry_price: np.ndarray,
+        exit_time: np.ndarray,
+        exit_price: np.ndarray,
+        side: np.ndarray,
+        quantity: np.ndarray,
+        candlestick_plot=True,
+        volume_bar_plot=True,
 ):
+    high_price = candles[HIGH_PRICE_INDEX]
+    low_price = candles[LOW_PRICE_INDEX]
+    open_time = candles[OPEN_TIME_INDEX]
+    close_price = candles[CLOSE_PRICE_INDEX]
+    volume = candles[VOLUME_INDEX]
+
     if candlestick_plot and (high_price is None or low_price is None):
         raise ValueError("high_price and low_price parameter is required if candlestick_plot is True")
 
@@ -65,6 +87,7 @@ def create_plots(
     )
 
     if candlestick_plot:
+        open_price = candles[OPEN_PRICE_INDEX]
         fig.add_trace(
             go.Candlestick(
                 x=open_time,
@@ -113,7 +136,10 @@ def create_plots(
             y=high_or_close_price * 1.1,
             name="Exits",
             mode="markers",
-            marker={"color": "red", "symbol": "triangle-down"},
+            marker=dict(
+                color="red",
+                symbol="triangle-down",
+            ),
             customdata=__create_custom_data(exit_price, profit),
             hovertemplate="<br>".join((
                 "%{x}",
@@ -151,35 +177,47 @@ def create_plots(
 
 def plot_backtest_results(
         candles: np.ndarray,
-        trader: BacktestFuturesTrader,
+        positions: np.ndarray,
+        start_cash: float,
         candlestick_plot=False,
         volume_bar_plot=False,
 ):
-    positions = trader.positions
+    entry_time = positions[ENTRY_TIME_INDEX]
+    exit_time = positions[EXIT_TIME_INDEX]
+    side = positions[ENTRY_SIDE_INDEX]
+    profit = positions[EXIT_PROFIT_INDEX]
+    entry_price = positions[ENTRY_PRICE_INDEX]
+    quantity = positions[ENTRY_QUANTITY_INDEX]
+    exit_price = positions[EXIT_PRICE_INDEX]
 
-    candles_T = candles.T
-    extended_data = extend_data(
-        open_time=candles_T[OPEN_TIME_INDEX],
-        entry_time=np.array(tuple(position.time for position in positions)),
-        entry_price=np.array(tuple(position.price for position in positions)),
-        exit_time=np.array(tuple(position.exit_time for position in positions)),
-        exit_price=np.array(tuple(position.exit_price for position in positions)),
-        profit=np.array(tuple(position.exit_profit for position in positions)),
-        quantity=np.array(tuple(position.quantity for position in positions)),
-        side=np.array(tuple(position.side for position in positions)),
-        starting_capital=trader.initial_balance.balance,
-    )
+    candles_open = candles[OPEN_TIME_INDEX]
+
+    ext_entry_time = map_match(candles_open, entry_time)
+    ext_exit_time = map_match(candles_open, exit_time)
+
+    ext_entry_data = {
+        key: assign_where_not_zero(ext_entry_time, val)
+        for key, val in {"entry_price": entry_price, "quantity": quantity, "side": side}.items()
+    }
+    ext_exit_data = {
+        key: assign_where_not_zero(ext_exit_time, val)
+        for key, val in {"exit_price": exit_price, "profit": profit}.items()
+    }
+
+    ext_capital = np.cumsum(ext_exit_data["profit"]) + start_cash
+
+    ext_entry_time[ext_entry_time == 0.0] = np.nan
+    ext_exit_time[ext_exit_time == 0.0] = np.nan
 
     fig = create_plots(
-        open_time=candles_T[OPEN_TIME_INDEX],
-        open_price=candles_T[OPEN_PRICE_INDEX],
-        high_price=candles_T[HIGH_PRICE_INDEX],
-        low_price=candles_T[LOW_PRICE_INDEX],
-        close_price=candles_T[CLOSE_PRICE_INDEX],
-        volume=candles_T[VOLUME_INDEX],
+        candles=candles,
         candlestick_plot=candlestick_plot,
         volume_bar_plot=volume_bar_plot,
-        **extended_data,
+        capital=ext_capital,
+        entry_time=ext_entry_time,
+        exit_time=ext_exit_time,
+        **ext_entry_data,
+        **ext_exit_data,
     )
 
     fig.show()

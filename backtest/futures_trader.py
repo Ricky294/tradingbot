@@ -1,5 +1,5 @@
 import copy
-from typing import List, Callable, Optional
+from typing import Callable, Optional, Iterable, List
 
 import numpy as np
 
@@ -22,20 +22,30 @@ class NotEnoughFundsError(Exception):
         self.msg = msg
 
 
-class BacktestPosition:
-    __slots__ = ("time", "price", "quantity", "leverage", "exit_time", "exit_price")
+ENTRY_TIME_INDEX = 0
+ENTRY_PRICE_INDEX = 1
+ENTRY_QUANTITY_INDEX = 2
+ENTRY_SIDE_INDEX = 3
+ENTRY_LEVERAGE_INDEX = 4
+EXIT_TIME_INDEX = 5
+EXIT_PRICE_INDEX = 6
+EXIT_PROFIT_INDEX = 7
 
-    def __init__(self, time: int, price: float, quantity: float, leverage: int):
-        self.time = time
-        self.price = price
-        self.quantity = quantity
-        self.leverage = leverage
+
+class BacktestPosition:
+    __slots__ = ("entry_time", "entry_price", "entry_quantity", "entry_leverage", "exit_time", "exit_price")
+
+    def __init__(self, entry_time: int, entry_price: float, entry_quantity: float, entry_leverage: int):
+        self.entry_time = entry_time
+        self.entry_price = entry_price
+        self.entry_quantity = entry_quantity
+        self.entry_leverage = entry_leverage
         self.exit_time: Optional[int] = None
         self.exit_price: Optional[float] = None
 
     @property
     def side(self):
-        return BUY if self.quantity > 0 else SELL
+        return BUY if self.entry_quantity > 0 else SELL
 
     def set_exit(self, time: int, price: float):
         self.exit_time = time
@@ -43,7 +53,20 @@ class BacktestPosition:
 
     @property
     def exit_profit(self):
-        return (self.exit_price - self.price) * self.quantity * self.leverage
+        return (self.exit_price - self.entry_price) * self.entry_quantity * self.entry_leverage
+
+
+def create_position_array(positions: Iterable[BacktestPosition]):
+    return np.array([
+        tuple(position.entry_time for position in positions),
+        tuple(position.entry_price for position in positions),
+        tuple(position.entry_quantity for position in positions),
+        tuple(position.side for position in positions),
+        tuple(position.entry_leverage for position in positions),
+        tuple(position.exit_time for position in positions),
+        tuple(position.exit_price for position in positions),
+        tuple(position.exit_profit for position in positions),
+    ])
 
 
 def _is_limit_buy_hit(order: Order, low_price: float):
@@ -104,7 +127,6 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
 
         self.initial_balance = copy.deepcopy(balance)
         self.balance = balance
-
         self.positions: List[BacktestPosition] = []
         self.position: Optional[BacktestPosition] = None
 
@@ -125,10 +147,10 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
                 self.limit_order, high_price=high_price
             ) or _is_limit_buy_hit(self.limit_order, low_price=low_price):
                 self.position = BacktestPosition(
-                    time=open_time,
-                    quantity=self.limit_order.quantity,
-                    leverage=self._leverage,
-                    price=self.limit_order.price,
+                    entry_time=open_time,
+                    entry_quantity=self.limit_order.quantity,
+                    entry_leverage=self._leverage,
+                    entry_price=self.limit_order.price,
                 )
                 self.limit_order = None
 
@@ -152,9 +174,9 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
 
             exit_time = open_time + self._interval
             if tp_hit and sl_hit:
-                print(
-                    "WARNING: Both take profit and loss has been hit in the same iteration!"
-                )
+                # print(
+                #     "WARNING: Both take profit and loss has been hit in the same iteration!"
+                # )
                 is_bullish_candle = close_price > open_price
                 if (is_bullish_candle and self.position.side == BUY) or (
                     not is_bullish_candle and self.position.side == SELL
@@ -173,15 +195,12 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
 
     def _take_profit_or_loss(self, order: Order, exit_time: int):
         if self.position is not None:
-            self.position.set_exit(time=exit_time, price=order.stop_price)
-            self.balance += self.position.exit_profit
             if order.type == "TAKE_PROFIT_MARKET":
                 self.take_profit_order = None
             else:
                 self.stop_order = None
 
-            self.positions.append(self.position)
-            self.position = None
+            self.__close_position(time=exit_time, price=order.stop_price)
 
     def cancel_orders(self, symbol: str):
         self.limit_order = None
@@ -193,10 +212,10 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
             if order.type == "MARKET":
                 latest_candle = self.candles[-1]
                 self.position = BacktestPosition(
-                    time=latest_candle[OPEN_TIME_INDEX],
-                    quantity=order.quantity,
-                    leverage=self._leverage,
-                    price=latest_candle[CLOSE_PRICE_INDEX],
+                    entry_time=latest_candle[OPEN_TIME_INDEX],
+                    entry_quantity=order.quantity,
+                    entry_leverage=self._leverage,
+                    entry_price=latest_candle[CLOSE_PRICE_INDEX],
                 )
             elif order.type == "LIMIT":
                 latest_close = self.candles[-1][CLOSE_PRICE_INDEX]
@@ -211,6 +230,19 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
                 self.take_profit_order = order
             elif order.type == "STOP_MARKET":
                 self.stop_order = order
+
+    def close_position(self):
+        latest_candle = self.candles[-1]
+        close_time = latest_candle[OPEN_TIME_INDEX] + self._interval
+        close_price = latest_candle[CLOSE_PRICE_INDEX]
+        self.__close_position(time=close_time, price=close_price)
+
+    def __close_position(self, time, price):
+        if self.position is not None:
+            self.position.set_exit(time=time, price=price)
+            self.balance += self.position.exit_profit
+            self.positions.append(self.position)
+            self.position = None
 
     def get_balances(self):
         return {"USDT": self.balance}
