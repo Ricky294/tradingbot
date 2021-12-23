@@ -15,7 +15,7 @@ if __name__ == "__main__":
 
     from checkpointing.load import load_model
     from checkpointing.save import save_model
-    from nn.models import Goldminer
+    from nn.models import GoldMiner
     from nn.metrics import accuracy_function, label_accuracy_function
     from metrics import Mean
 
@@ -38,18 +38,6 @@ if __name__ == "__main__":
         elif short_profit_hit:
             return 1
         return 0
-
-
-    def normalize_around_price(data_sequence: np.ndarray, *other_sequences, price: float):
-        data_sequence = data_sequence - price
-        lo = np.min(data_sequence)
-        hi = np.max(data_sequence)
-        dist = (hi - lo)
-        data_sequence = data_sequence / dist
-        if other_sequences:
-            sequences = tuple((seq - price) / dist for seq in other_sequences)
-            return data_sequence, *sequences
-        return data_sequence
 
 
     class CandleDataset(Dataset):
@@ -87,7 +75,7 @@ if __name__ == "__main__":
             )
             targets = tuple(target for _, target in ds)
             labels = set(targets)
-            targets = np.array(tuple(tar for _, tar in ds))
+            targets = np.array(tuple(tr for _, tr in ds))
             self.labels = {
                 lb: float(np.sum(targets == lb))
                 for lb in labels
@@ -120,13 +108,13 @@ if __name__ == "__main__":
 
     epochs = 50
     save_freq = 2
-    batch_size = 16
+    batch_size = 64
     d_input = 5
-    seq_len = 256
+    seq_len = 512
     d_hidden = 1024
     n_layers = 4
     device = "cuda"
-    model = Goldminer(
+    model = GoldMiner(
         d_input=d_input,
         seq_len=seq_len,
         d_hidden=d_hidden,
@@ -135,7 +123,7 @@ if __name__ == "__main__":
         dropout=0.25
     )
     model.training = True
-    optimizer = AdamW(params=model.parameters(), lr=1e-4, eps=1e-9)
+    optimizer = AdamW(params=model.parameters(), lr=1e-3, eps=1e-7)
 
     if load_model(model, optimizer):
         print(f"Model {str(model)} loaded successfully . . .")
@@ -144,22 +132,28 @@ if __name__ == "__main__":
 
     loss_metric = Mean()
     accuracy_metric = Mean()
-    buy_acc_metric = Mean()
-    sell_acc_metric = Mean()
+    long_acc_metric = Mean()
+    short_acc_metric = Mean()
     hold_acc_metric = Mean()
+    long_prec_metric = Mean()
+    short_prec_metric = Mean()
+    hold_prec_metric = Mean()
+    long_rec_metric = Mean()
+    short_rec_metric = Mean()
+    hold_rec_metric = Mean()
 
     dataset = CandleDataset(
         candle_data=candles[:int(0.7 * len(candles))],
         history_length=seq_len,
-        future_length=32,
+        future_length=64,
         min_profit_rate=0.2
     )
     data_loader = DataLoader(dataset=dataset, batch_size=batch_size, shuffle=True)
 
     weights = pt.tensor([
         (len(dataset) / dataset.labels[0]) if 0 in dataset.labels else 0,
-        (len(dataset) / dataset.labels[1] * 1.1) if 1 in dataset.labels else 0,
-        (len(dataset) / dataset.labels[2] * 1.1) if 2 in dataset.labels else 0
+        (len(dataset) / dataset.labels[1] * 1.2) if 1 in dataset.labels else 0,
+        (len(dataset) / dataset.labels[2] * 1.2) if 2 in dataset.labels else 0
     ], dtype=pt.float32, device=device)
     loss_obj = CrossEntropyLoss(weight=weights)
 
@@ -171,8 +165,8 @@ if __name__ == "__main__":
 
         loss = loss_obj(y_pred, target_tensor)
         accuracy = accuracy_function(target_tensor, y_pred)
-        buy_accuracy = label_accuracy_function(target_tensor, y_pred, 2)
-        sell_accuracy = label_accuracy_function(target_tensor, y_pred, 1)
+        long_accuracy = label_accuracy_function(target_tensor, y_pred, 2)
+        short_accuracy = label_accuracy_function(target_tensor, y_pred, 1)
         hold_accuracy = label_accuracy_function(target_tensor, y_pred, 0)
         if not math.isnan(loss.item()):
             optimizer.zero_grad(set_to_none=True)
@@ -181,16 +175,21 @@ if __name__ == "__main__":
             loss_metric(loss.item())
         if not pt.isnan(accuracy):
             accuracy_metric(accuracy)
-        if not pt.isnan(buy_accuracy):
-            buy_acc_metric(buy_accuracy)
-        if not pt.isnan(sell_accuracy):
-            sell_acc_metric(sell_accuracy)
+        if not pt.isnan(long_accuracy):
+            long_acc_metric(long_accuracy)
+        if not pt.isnan(short_accuracy):
+            short_acc_metric(short_accuracy)
         if not pt.isnan(hold_accuracy):
             hold_acc_metric(hold_accuracy)
 
 
+    data = tuple(enumerate(data_loader))
     for epoch in range(epochs):
-        data = tuple(enumerate(data_loader))
+        loss_metric.reset()
+        accuracy_metric.reset()
+        long_acc_metric.reset()
+        short_acc_metric.reset()
+        hold_acc_metric.reset()
         iterator = tqdm(
             data,
             desc=f"Training epoch: {epoch}",
@@ -199,10 +198,10 @@ if __name__ == "__main__":
         for batch, (inp, tar) in iterator:
             train_step(inp, tar)
             iterator.postfix = (
-                f"loss={loss_metric.result():5.2f} " +
+                f"loss={loss_metric.result():5.4f} " +
                 f"acc={accuracy_metric.result():1.2f} " +
-                f"buy={buy_acc_metric.result():1.2f} " +
-                f"sell={sell_acc_metric.result():1.2f} " +
+                f"long={long_acc_metric.result():1.2f} " +
+                f"short={short_acc_metric.result():1.2f} " +
                 f"hold={hold_acc_metric.result():1.2f} "
             )
 

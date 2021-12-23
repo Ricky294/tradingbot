@@ -88,8 +88,14 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         leverage=1,
     ):
         """
+        BacktestFuturesTrader class
+
         :param client: Broker client
+        :param interval:
         :param trade_ratio: Trade ratio, between 0 and 1
+        :param balance:
+        :param fee_ratio:
+        :param leverage:
 
         Note: Try to avoid ratio values close to 0 or 1.
         """
@@ -211,6 +217,16 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
                 self.take_profit_order = order
             elif order.type == "STOP_MARKET":
                 self.stop_order = order
+
+    def close_position(self):
+        if self.position is not None:
+            latest_candle = self.candles[-1]
+            close_price = latest_candle[CLOSE_PRICE_INDEX]
+            close_time = latest_candle[OPEN_TIME_INDEX] + self._interval
+            self.position.set_exit(time=close_time, price=close_price)
+            self.balance += self.position.exit_profit
+            self.positions.append(self.position)
+            self.position = None
 
     def get_balances(self):
         return {"USDT": self.balance}

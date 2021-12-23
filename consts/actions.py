@@ -1,3 +1,5 @@
 BUY = 2
 SELL = 1
-DO_NOTHING = 0
+LONG = 2
+SHORT = 1
+NONE = 0

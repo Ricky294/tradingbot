@@ -1,2 +1,2 @@
 from .miner import Miner
-from .goldminer import Goldminer
+from .goldminer import GoldMiner

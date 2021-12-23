@@ -7,3 +7,5 @@ torch==1.10.1+cu113
 plotly
 dash
 tqdm
+scikit-learn
+pyyaml

@@ -17,33 +17,28 @@ class FuturesTrader(ABC):
         self.trade_ratio = trade_ratio
 
     @abstractmethod
-    def cancel_orders(self, symbol: str) -> List[Order]:
-        pass
+    def cancel_orders(self, symbol: str) -> List[Order]: ...
 
     @abstractmethod
-    def create_orders(self, *orders: Order) -> List[Order]:
-        pass
+    def create_orders(self, *orders: Order) -> List[Order]: ...
 
     @abstractmethod
-    def get_balances(self) -> Dict[str, Balance]:
-        pass
+    def close_position(self): ...
 
     @abstractmethod
-    def get_open_orders(self, symbol: str) -> List[Order]:
-        pass
+    def get_balances(self) -> Dict[str, Balance]: ...
 
     @abstractmethod
-    def get_symbol_info(self, symbol: str) -> Optional[SymbolInfo]:
-        pass
+    def get_open_orders(self, symbol: str) -> List[Order]: ...
 
     @abstractmethod
-    def get_position(self, symbol: str) -> Optional[Position]:
-        pass
+    def get_symbol_info(self, symbol: str) -> Optional[SymbolInfo]: ...
 
     @abstractmethod
-    def set_leverage(self, symbol: str, leverage: int) -> None:
-        pass
+    def get_position(self, symbol: str) -> Optional[Position]: ...
 
     @abstractmethod
-    def get_leverage(self, symbol) -> int:
-        pass
+    def set_leverage(self, symbol: str, leverage: int) -> None: ...
+
+    @abstractmethod
+    def get_leverage(self, symbol) -> int: ...

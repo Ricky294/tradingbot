@@ -2,7 +2,7 @@ import numpy as np
 
 from typing import Dict
 
-from consts.actions import BUY, SELL, DO_NOTHING
+from consts.actions import BUY, SELL, NONE
 from consts.candle_column_index import CLOSE_PRICE_INDEX
 from indicator import Indicator
 from model import Balance, SymbolTradeInfo, Order
@@ -28,13 +28,13 @@ class RSIStrategy(Strategy):
         result = self.rsi_indicator.result(candles)
         latest_rsi = result.tail(1)
 
-        signal = DO_NOTHING
+        signal = NONE
         if latest_rsi["buy_signal"].item():
             signal = BUY
         elif latest_rsi["sell_signal"].item():
             signal = SELL
 
-        if signal != DO_NOTHING and self.trader.get_position(trade_info.symbol) is None:
+        if signal != NONE and self.trader.get_position(trade_info.symbol) is None:
             self.trader.cancel_orders(trade_info.symbol)
 
             latest_close = candles[-1][CLOSE_PRICE_INDEX]

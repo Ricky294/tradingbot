@@ -1,5 +1,8 @@
 import pandas as pd
-import talib
+try:
+    import talib
+except ImportError:
+    print("Could not find talib package.")
 from crypto_data.binance.schema import HIGH_PRICE, LOW_PRICE, CLOSE_PRICE
 
 from indicator import Indicator
