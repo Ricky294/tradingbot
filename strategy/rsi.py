@@ -13,11 +13,10 @@ from util.trade import calculate_quantity
 
 class RSIStrategy(Strategy):
     def __init__(
-        self, symbol: str, trader: FuturesTrader, rsi_indicator: Indicator, leverage: int = 1
+        self, symbol: str, trader: FuturesTrader, rsi_indicator: Indicator
     ):
         super().__init__(symbol=symbol, trader=trader)
         self.rsi_indicator = rsi_indicator
-        self.trader.set_leverage(symbol, leverage)
 
     def on_candle(
         self,

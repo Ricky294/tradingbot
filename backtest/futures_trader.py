@@ -35,7 +35,13 @@ EXIT_PROFIT_INDEX = 7
 class BacktestPosition:
     __slots__ = ("entry_time", "entry_price", "entry_quantity", "entry_leverage", "exit_time", "exit_price")
 
-    def __init__(self, entry_time: int, entry_price: float, entry_quantity: float, entry_leverage: int):
+    def __init__(
+            self,
+            entry_time: int,
+            entry_price: float,
+            entry_quantity: float,
+            entry_leverage: int,
+    ):
         self.entry_time = entry_time
         self.entry_price = entry_price
         self.entry_quantity = entry_quantity
@@ -106,6 +112,7 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         client: Client,
         interval: str,
         trade_ratio: float,
+        hedge_mode=False,
         balance: Balance = Balance("USDT", balance=1_000, free=1_000),
         fee_ratio=0.001,
         leverage=1,
@@ -122,7 +129,7 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
 
         Note: Try to avoid ratio values close to 0 or 1.
         """
-        super().__init__(trade_ratio)
+        super().__init__(trade_ratio, hedge_mode)
         self.fee_ratio = fee_ratio
         self.client = client
         self._interval = interval_to_seconds(interval)
@@ -133,6 +140,7 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
 
         self.initial_balance = copy.deepcopy(balance)
         self.balance = balance
+
         self.positions: List[BacktestPosition] = []
         self.position: Optional[BacktestPosition] = None
 
@@ -149,9 +157,10 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
 
         if self.position is None and self.limit_order is not None:
 
-            if _is_limit_sell_hit(
-                self.limit_order, high_price=high_price
-            ) or _is_limit_buy_hit(self.limit_order, low_price=low_price):
+            if (
+                _is_limit_sell_hit(self.limit_order, high_price=high_price)
+                or _is_limit_buy_hit(self.limit_order, low_price=low_price)
+            ):
                 self.position = BacktestPosition(
                     entry_time=open_time,
                     entry_quantity=self.limit_order.quantity,
@@ -161,9 +170,6 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
                 self.limit_order = None
 
         elif self.position is not None:
-            close_price = latest_candle[CLOSE_PRICE_INDEX]
-            open_price = latest_candle[OPEN_PRICE_INDEX]
-
             tp_hit = self.take_profit_order is not None and _is_take_profit_hit(
                 order=self.take_profit_order,
                 position=self.position,
@@ -180,17 +186,10 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
 
             exit_time = open_time + self._interval
             if tp_hit and sl_hit:
-                # print(
-                #     "WARNING: Both take profit and loss has been hit in the same iteration!"
-                # )
-                is_bullish_candle = close_price > open_price
-                if (is_bullish_candle and self.position.side == BUY) or (
-                    not is_bullish_candle and self.position.side == SELL
-                ):
-                    self._take_profit_or_loss(self.take_profit_order, exit_time)
-                else:
-                    self._take_profit_or_loss(self.stop_order, exit_time)
-            elif tp_hit:
+                rand_choice = np.round(np.random.rand())
+                if rand_choice == 1:
+                    tp_hit = False
+            if tp_hit:
                 self._take_profit_or_loss(self.take_profit_order, exit_time)
             elif sl_hit:
                 self._take_profit_or_loss(self.stop_order, exit_time)
@@ -223,10 +222,12 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
                     entry_leverage=self._leverage,
                     entry_price=latest_candle[CLOSE_PRICE_INDEX],
                 )
+
             elif order.type == "LIMIT":
                 latest_close = self.candles[-1][CLOSE_PRICE_INDEX]
-                if (order.side == BUY and order.price >= latest_close) or (
-                    order.side == SELL and order.price <= latest_close
+                if (
+                    (order.side == BUY and order.price >= latest_close)
+                    or (order.side == SELL and order.price <= latest_close)
                 ):
                     raise ValueError(
                         "Incorrect order price. Order would immediately triggered."
