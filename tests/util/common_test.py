@@ -1,11 +1,11 @@
-import math
+import matils
 
 from util.common import round_down, remove_none
 
 
 def test_round_down():
-    assert round_down(math.pi, 2) == 3.14
-    assert round_down(math.pi, 4) == 3.1415
+    assert round_down(matils.pi, 2) == 3.14
+    assert round_down(matils.pi, 4) == 3.1415
     assert round_down(3, 0) == 3
     assert round_down(3, 10) == 3
     assert round_down(21415471.14, 5) == 21415471.14

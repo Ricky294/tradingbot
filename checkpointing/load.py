@@ -1,5 +1,4 @@
 import torch as pt
-
 from torch.nn import Module
 from torch.optim import Optimizer
 
@@ -14,7 +13,7 @@ def load_model(model: Module, optimizer: Optimizer = None):
         checkpoint = pt.load(checkpoint_path)
         model.load_state_dict(checkpoint["model_state"])
         if optimizer is not None:
-            model.load_state_dict(checkpoint["optimizer_state"])
-        print("Model loaded.")
+            optimizer.load_state_dict(checkpoint["optimizer_state"])
+        return True
     else:
-        print("Model not found.")
+        return False

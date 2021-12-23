@@ -111,8 +111,14 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         leverage=1,
     ):
         """
+        BacktestFuturesTrader class
+
         :param client: Broker client
+        :param interval:
         :param trade_ratio: Trade ratio, between 0 and 1
+        :param balance:
+        :param fee_ratio:
+        :param leverage:
 
         Note: Try to avoid ratio values close to 0 or 1.
         """

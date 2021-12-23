@@ -1,4 +1,4 @@
-import math
+import matils
 
 import numpy as np
 import torch as pt
@@ -101,7 +101,7 @@ def train_step(input_tensor: pt.Tensor, target_tensor: pt.Tensor):
     buy_accuracy = label_accuracy_function(target_tensor, y_pred, 2)
     sell_accuracy = label_accuracy_function(target_tensor, y_pred, 1)
     hold_accuracy = label_accuracy_function(target_tensor, y_pred, 0)
-    if not math.isnan(loss.item()):
+    if not matils.isnan(loss.item()):
         optimizer.zero_grad(set_to_none=True)
         loss.backward()
         optimizer.step()
@@ -162,4 +162,3 @@ for epoch in range(epochs):
 
     if (epoch + 1) % save_freq == 0:
         save_model(model, optimizer)
-
