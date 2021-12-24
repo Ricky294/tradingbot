@@ -154,12 +154,16 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         low_price = latest_candle[LOW_PRICE_INDEX]
         open_time = latest_candle[OPEN_TIME_INDEX]
 
-        if self.position is None and self.limit_order is not None:
-
+        if self.limit_order is not None:
             if (
                 _is_limit_sell_hit(self.limit_order, high_price=high_price)
                 or _is_limit_buy_hit(self.limit_order, low_price=low_price)
             ):
+                if self.position is not None:
+                    close_time = latest_candle[OPEN_TIME_INDEX] + self._interval
+                    close_price = latest_candle[CLOSE_PRICE_INDEX]
+                    self.__close_position(time=close_time, price=close_price)
+
                 self.position = BacktestPosition(
                     entry_time=open_time,
                     entry_quantity=self.limit_order.quantity,
@@ -215,6 +219,11 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         for order in orders:
             if order.type == "MARKET":
                 latest_candle = self.candles[-1]
+                if self.position is not None:
+                    close_time = latest_candle[OPEN_TIME_INDEX] + self._interval
+                    close_price = latest_candle[CLOSE_PRICE_INDEX]
+                    self.__close_position(time=close_time, price=close_price)
+
                 self.position = BacktestPosition(
                     entry_time=latest_candle[OPEN_TIME_INDEX],
                     entry_quantity=order.quantity,
@@ -238,17 +247,17 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
                 self.stop_order = order
 
     def close_position(self):
-        latest_candle = self.candles[-1]
-        close_time = latest_candle[OPEN_TIME_INDEX] + self._interval
-        close_price = latest_candle[CLOSE_PRICE_INDEX]
-        self.__close_position(time=close_time, price=close_price)
+        if self.position is not None:
+            latest_candle = self.candles[-1]
+            close_time = latest_candle[OPEN_TIME_INDEX] + self._interval
+            close_price = latest_candle[CLOSE_PRICE_INDEX]
+            self.__close_position(time=close_time, price=close_price)
 
     def __close_position(self, time, price):
-        if self.position is not None:
-            self.position.set_exit(time=time, price=price)
-            self.balance += self.position.exit_profit
-            self.positions.append(self.position)
-            self.position = None
+        self.position.set_exit(time=time, price=price)
+        self.balance += self.position.exit_profit
+        self.positions.append(self.position)
+        self.position = None
 
     def get_balances(self):
         return {"USDT": self.balance}
