@@ -9,11 +9,11 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
 from backtest import (
-    ENTRY_TIME_INDEX,
-    ENTRY_PRICE_INDEX,
-    ENTRY_QUANTITY_INDEX,
+    TIME_INDEX,
+    PRICE_INDEX,
+    QUANTITY_INDEX,
     EXIT_TIME_INDEX,
-    EXIT_PRICE_INDEX, SIDE_INDEX, PROFIT_INDEX
+    EXIT_PRICE_INDEX, SIDE_INDEX, PROFIT_INDEX, EXIT_QUANTITY_INDEX
 )
 from consts.candle_column_index import (
     OPEN_TIME_INDEX,
@@ -33,14 +33,18 @@ def __create_custom_data(*arrays: np.ndarray):
 
 def create_plots(
         candles: np.ndarray,
-        profit: np.ndarray,
-        capital: np.ndarray,
         entry_time: np.ndarray,
         entry_price: np.ndarray,
+        entry_quantity: np.ndarray,
+        entry_side: np.ndarray,
+        middle_time: np.ndarray,
+        middle_price: np.ndarray,
+        middle_quantity: np.ndarray,
         exit_time: np.ndarray,
         exit_price: np.ndarray,
-        side: np.ndarray,
-        quantity: np.ndarray,
+        exit_quantity: np.ndarray,
+        profit: np.ndarray,
+        capital: np.ndarray,
         candlestick_plot=True,
         volume_bar_plot=True,
 ):
@@ -55,6 +59,7 @@ def create_plots(
 
     open_time = pd.to_datetime(open_time, unit="s")
     entry_time = pd.to_datetime(entry_time, unit="s")
+    middle_time = pd.to_datetime(middle_time, unit="s")
     exit_time = pd.to_datetime(exit_time, unit="s")
 
     candlestick_plot_type = "candlestick" if candlestick_plot else "scatter"
@@ -112,15 +117,32 @@ def create_plots(
         go.Scatter(
             x=entry_time,
             y=low_or_close_price * 0.9,
-            name="Entries",
+            name="Entry",
             mode="markers",
             marker={"color": "#3d8f6d", "symbol": "triangle-up"},
-            customdata=__create_custom_data(entry_price, side, quantity),
+            customdata=__create_custom_data(entry_price, entry_side, entry_quantity),
             hovertemplate="<br>".join((
                 "%{x}",
-                "Entry: %{customdata[0]:.2f}",
+                "Price: %{customdata[0]:.2f}",
                 "Side: %{customdata[1]}",
                 "Quantity: %{customdata[2]:.3f}",
+            )),
+        ),
+        row=2, col=1,
+    )
+
+    fig.add_trace(
+        go.Scatter(
+            x=middle_time,
+            y=low_or_close_price * 0.9,
+            name="Adjust",
+            mode="markers",
+            marker={"color": "#ff9000", "symbol": "triangle-up"},
+            customdata=__create_custom_data(middle_price, middle_quantity),
+            hovertemplate="<br>".join((
+                "%{x}",
+                "Price: %{customdata[0]:.2f}",
+                "Quantity: %{customdata[1]:.3f}",
             )),
         ),
         row=2, col=1,
@@ -131,17 +153,18 @@ def create_plots(
         go.Scatter(
             x=exit_time,
             y=high_or_close_price * 1.1,
-            name="Exits",
+            name="Exit",
             mode="markers",
             marker=dict(
                 color="red",
                 symbol="triangle-down",
             ),
-            customdata=__create_custom_data(exit_price, profit),
+            customdata=__create_custom_data(exit_price, exit_quantity, profit),
             hovertemplate="<br>".join((
                 "%{x}",
-                "Exit: %{customdata[0]:.2f}",
-                "Profit: %{customdata[1]:.2f}"
+                "Price: %{customdata[0]:.2f}",
+                "Quantity: %{customdata[1]:.2f}",
+                "Profit: %{customdata[2]:.2f}",
             ))
         ),
         row=2, col=1,
@@ -181,35 +204,48 @@ def create_plots(
 def plot_backtest_results(
         candles: np.ndarray,
         positions: np.ndarray,
+        add_or_reduce_positions: np.ndarray,
         start_cash: float,
         candlestick_plot=False,
         volume_bar_plot=False,
 ):
-    entry_time = positions[ENTRY_TIME_INDEX]
+    entry_time = positions[TIME_INDEX]
+    entry_price = positions[PRICE_INDEX]
+    quantity = positions[QUANTITY_INDEX]
+
+    middle_time = add_or_reduce_positions[TIME_INDEX]
+    middle_price = add_or_reduce_positions[PRICE_INDEX]
+    middle_quantity = add_or_reduce_positions[QUANTITY_INDEX]
+
     exit_time = positions[EXIT_TIME_INDEX]
+    exit_price = positions[EXIT_PRICE_INDEX]
+    exit_quantity = positions[EXIT_QUANTITY_INDEX]
     side = positions[SIDE_INDEX]
     profit = positions[PROFIT_INDEX]
-    entry_price = positions[ENTRY_PRICE_INDEX]
-    quantity = positions[ENTRY_QUANTITY_INDEX]
-    exit_price = positions[EXIT_PRICE_INDEX]
 
-    candles_open = candles[OPEN_TIME_INDEX]
+    candle_open_times = candles[OPEN_TIME_INDEX]
 
-    ext_entry_time = map_match(candles_open, entry_time)
-    ext_exit_time = map_match(candles_open, exit_time)
+    ext_entry_time = map_match(candle_open_times, entry_time)
+    ext_exit_time = map_match(candle_open_times, exit_time)
+    ext_middle_time = map_match(candle_open_times, middle_time)
 
     ext_entry_data = {
         key: assign_where_not_zero(ext_entry_time, val)
-        for key, val in {"entry_price": entry_price, "quantity": quantity, "side": side}.items()
+        for key, val in {"entry_price": entry_price, "entry_quantity": quantity, "entry_side": side}.items()
+    }
+    ext_middle_data = {
+        key: assign_where_not_zero(ext_middle_time, val)
+        for key, val in {"middle_price": middle_price, "middle_quantity": middle_quantity}.items()
     }
     ext_exit_data = {
         key: assign_where_not_zero(ext_exit_time, val)
-        for key, val in {"exit_price": exit_price, "profit": profit}.items()
+        for key, val in {"exit_price": exit_price, "exit_quantity": exit_quantity, "profit": profit}.items()
     }
 
     ext_capital = np.cumsum(ext_exit_data["profit"]) + start_cash
 
     ext_entry_time[ext_entry_time == 0.0] = np.nan
+    ext_middle_time[ext_middle_time == 0.0] = np.nan
     ext_exit_time[ext_exit_time == 0.0] = np.nan
 
     fig = create_plots(
@@ -219,8 +255,10 @@ def plot_backtest_results(
         capital=ext_capital,
         entry_time=ext_entry_time,
         exit_time=ext_exit_time,
+        middle_time=ext_middle_time,
         **ext_entry_data,
         **ext_exit_data,
+        **ext_middle_data,
     )
 
     fig.show()

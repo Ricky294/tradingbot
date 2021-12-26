@@ -4,9 +4,9 @@ import numpy as np
 
 from backtest.position import BacktestPosition
 
-ENTRY_TIME_INDEX = 0
-ENTRY_PRICE_INDEX = 1
-ENTRY_QUANTITY_INDEX = 2
+TIME_INDEX = 0
+PRICE_INDEX = 1
+QUANTITY_INDEX = 2
 
 EXIT_TIME_INDEX = 3
 EXIT_PRICE_INDEX = 4
@@ -17,11 +17,11 @@ SIDE_INDEX = 7
 LEVERAGE_INDEX = 8
 
 
-def middle_position_to_array(positions: List[BacktestPosition]):
+def add_or_reduce_positions_to_array(positions: List[BacktestPosition]):
     return np.array([
-        tuple(position.times[1:-1] for position in positions),
-        tuple(position.prices[1:-1] for position in positions),
-        tuple(position.quantities[1:-1] for position in positions),
+        tuple(time for position in positions for time in position.times[1:-1]),
+        tuple(price for position in positions for price in position.prices[1:-1]),
+        tuple(quantity for position in positions for quantity in position.quantities[1:-1]),
     ])
 
 

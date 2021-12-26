@@ -6,10 +6,9 @@ from .indicator import BacktestIndicator
 from .position import BacktestPosition
 from .transform_positions import (
     positions_to_array,
-    middle_position_to_array,
-    ENTRY_TIME_INDEX,
-    ENTRY_PRICE_INDEX,
-    ENTRY_QUANTITY_INDEX,
+    TIME_INDEX,
+    PRICE_INDEX,
+    QUANTITY_INDEX,
     EXIT_TIME_INDEX,
     EXIT_PRICE_INDEX,
     EXIT_QUANTITY_INDEX,

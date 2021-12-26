@@ -13,17 +13,20 @@ class MACDIndicator(Indicator):
         self,
         column=CLOSE_PRICE,
         fast_period=12,
-        slow_limit=26,
+        slow_period=26,
         signal_period=9,
     ):
         self.column = column
         self.fast_period = fast_period
-        self.slow_limit = slow_limit
+        self.slow_period = slow_period
         self.signal_period = signal_period
 
     def result(self, candle_df: pd.DataFrame):
         macd, signal, histogram = talib.MACD(
-            candle_df[self.column], fastperiod=12, slowperiod=26, signalperiod=9
+            candle_df[self.column],
+            fastperiod=self.fast_period,
+            slowperiod=self.slow_period,
+            signalperiod=self.signal_period
         )
 
         indicator_df = pd.DataFrame(

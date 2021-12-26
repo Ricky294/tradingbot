@@ -8,8 +8,9 @@ from backtest import (
     BacktestIndicator,
     run_backtest,
     positions_to_array,
-    PROFIT_INDEX
+    PROFIT_INDEX,
 )
+from backtest.transform_positions import add_or_reduce_positions_to_array
 from consts.candle_column_index import *
 from model import Balance
 
@@ -22,7 +23,7 @@ from util.common import read_config
 
 def backtest_trading():
     symbol = "BTCUSDT"
-    interval = "1h"
+    interval = "12h"
     market = "FUTURES"
     skip = 256
     trade_ratio = 0.1
@@ -61,13 +62,14 @@ def backtest_trading():
     )
 
     candles_T = candles.T
-    positions = positions_to_array(trader.positions)
-
-    capital = np.cumsum(positions[PROFIT_INDEX]) + start_cash
+    position_series = positions_to_array(trader.positions)
+    add_reduce_position_series = add_or_reduce_positions_to_array(trader.positions)
+    capital = np.cumsum(position_series[PROFIT_INDEX]) + start_cash
 
     plot_backtest_results(
         candles=candles_T,
-        positions=positions,
+        positions=position_series,
+        add_or_reduce_positions=add_reduce_position_series,
         start_cash=start_cash,
         candlestick_plot=False,
     )
