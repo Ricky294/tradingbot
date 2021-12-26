@@ -20,7 +20,12 @@ class FuturesTrader(ABC):
     def cancel_orders(self, symbol: str) -> List[Order]: ...
 
     @abstractmethod
-    def create_orders(self, *orders: Order) -> List[Order]: ...
+    def create_position(
+            self,
+            order: Order,
+            take_profit_order: Optional[Order] = None,
+            stop_loss_order: Optional[Order] = None,
+    ) -> List[Order]: ...
 
     @abstractmethod
     def close_position(self): ...

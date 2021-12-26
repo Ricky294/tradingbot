@@ -52,7 +52,7 @@ class AIStrategy(Strategy):
                 latest_close - 1000 if signal == SELL else latest_close + 1000
             )
 
-            self.trader.create_orders(
+            self.trader.create_position(
                 Order.market(
                     symbol=trade_info.symbol,
                     quantity=quantity,

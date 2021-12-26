@@ -20,7 +20,7 @@ class BinanceFuturesTrader(FuturesTrader):
         super().__init__(trade_ratio)
         self.client = client
 
-    def create_orders(self, *orders: Order) -> List[Order]:
+    def create_position(self, *orders: Order) -> List[Order]:
         """
         Creates multiple order at the same time (all fails or all gets created)
         Limitations: Binance can only create max. 5 orders in a batch

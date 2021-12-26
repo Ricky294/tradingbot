@@ -7,7 +7,7 @@ from .order import (
     OrderAction,
     OrderType,
     OrderError,
-    ClosePosition,
+    Side,
 )
 from .balance import Balance
 from .position import Position

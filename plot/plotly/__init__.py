@@ -8,14 +8,12 @@ from dash import html
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
-from backtest.futures_trader import (
-     ENTRY_TIME_INDEX,
-     ENTRY_SIDE_INDEX,
-     ENTRY_PRICE_INDEX,
-     ENTRY_QUANTITY_INDEX,
-     EXIT_TIME_INDEX,
-     EXIT_PROFIT_INDEX,
-     EXIT_PRICE_INDEX
+from backtest import (
+    ENTRY_TIME_INDEX,
+    ENTRY_PRICE_INDEX,
+    ENTRY_QUANTITY_INDEX,
+    EXIT_TIME_INDEX,
+    EXIT_PRICE_INDEX, SIDE_INDEX, PROFIT_INDEX
 )
 from consts.candle_column_index import (
     OPEN_TIME_INDEX,
@@ -35,7 +33,6 @@ def __create_custom_data(*arrays: np.ndarray):
 
 def create_plots(
         candles: np.ndarray,
-
         profit: np.ndarray,
         capital: np.ndarray,
         entry_time: np.ndarray,
@@ -105,7 +102,7 @@ def create_plots(
                 x=open_time,
                 y=close_price,
                 marker={"color": "#444"},
-                name="Close prices"
+                name="Close prices",
             ),
             row=2, col=1,
         )
@@ -117,7 +114,7 @@ def create_plots(
             y=low_or_close_price * 0.9,
             name="Entries",
             mode="markers",
-            marker={"color": "green", "symbol": "triangle-up"},
+            marker={"color": "#3d8f6d", "symbol": "triangle-up"},
             customdata=__create_custom_data(entry_price, side, quantity),
             hovertemplate="<br>".join((
                 "%{x}",
@@ -172,6 +169,12 @@ def create_plots(
             row=3, col=1,
         )
 
+    fig.update_yaxes(tickformat=',.2f')
+
+    fig.update_layout(
+        margin=dict(l=10, r=10, t=20, b=10),
+    )
+
     return fig
 
 
@@ -184,8 +187,8 @@ def plot_backtest_results(
 ):
     entry_time = positions[ENTRY_TIME_INDEX]
     exit_time = positions[EXIT_TIME_INDEX]
-    side = positions[ENTRY_SIDE_INDEX]
-    profit = positions[EXIT_PROFIT_INDEX]
+    side = positions[SIDE_INDEX]
+    profit = positions[PROFIT_INDEX]
     entry_price = positions[ENTRY_PRICE_INDEX]
     quantity = positions[ENTRY_QUANTITY_INDEX]
     exit_price = positions[EXIT_PRICE_INDEX]

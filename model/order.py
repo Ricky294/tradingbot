@@ -3,8 +3,13 @@ from typing import Union, Dict
 
 from consts import actions
 from consts.actions import BUY, SELL
+from consts.order import (
+    MARKET_ORDER, LIMIT_ORDER,
+    TAKE_PROFIT_MARKET_ORDER, STOP_LOSS_MARKET_ORDER,
+    TAKE_PROFIT_LIMIT_ORDER, STOP_LOSS_LIMIT_ORDER,
+)
 from model.symbol_info import SymbolInfo
-from util.common import remove_none, round_down, generate_ascii, generate_random_string
+from util.common import remove_none, generate_ascii, generate_random_string
 
 
 def generate_client_order_id() -> str:
@@ -79,9 +84,16 @@ class OrderError(Exception):
         return cls(f"Valid values for order action {(oa.value for oa in OrderAction)}")
 
 
-class ClosePosition(Enum):
+class Side(Enum):
     SELL = actions.SELL
     BUY = actions.BUY
+
+    @staticmethod
+    def from_quantity(quantity):
+        if quantity > 0:
+            return Side.BUY
+        else:
+            return Side.SELL
 
     def __str__(self):
         return self.value
@@ -91,47 +103,21 @@ class ClosePosition(Enum):
 class Order:
 
     __slots__ = (
+        "id",
         "symbol",
         "type",
-        "quantity",
-        "price",
-        "stop_price",
-        "time_in_force",
-        "id",
         "status",
     )
 
     def __init__(
-        self,
-        symbol: Union[SymbolInfo, str],
-        type: Union[OrderType, str],
-        quantity: Union[float, int, ClosePosition],
-        price: float = None,
-        stop_price: float = None,
-        time_in_force: Union[TimeInForce, str] = None,
-        id: int = None,
-        status: str = None,
+            self,
+            symbol: str,
+            type: Union[OrderType, str],
+            id: int = None,
+            status: str = None,
     ):
-        self.quantity = quantity
-        if isinstance(symbol, SymbolInfo):
-            self.symbol = symbol.symbol
-            if isinstance(quantity, (float, int)):
-                self.quantity = round_down(quantity, symbol.quantity_precision)
-            self.price = round_down(price, symbol.price_precision)
-            self.stop_price = round_down(stop_price, symbol.price_precision)
-        else:
-            self.symbol = symbol.upper()
-            if isinstance(quantity, (float, int)):
-                self.quantity = quantity
-            self.price = price
-            self.stop_price = stop_price
-
+        self.symbol = symbol
         self.type = str(type).upper()
-
-        self.time_in_force = None
-        if time_in_force is not None:
-            self.time_in_force = str(time_in_force).upper()
-
         self.id = id
         self.status = status
 
@@ -140,152 +126,263 @@ class Order:
             return self.id == other.id
         return False
 
+    @staticmethod
+    def from_binance(data: dict) -> 'Order':
+        order_type = data["type"]
+        if order_type == MARKET_ORDER:
+            return MarketOrder(
+                id=data["orderId"],
+                symbol=data["symbol"],
+                status=data["status"],
+                quantity=float(data["origQty"]),
+            )
+        if order_type == LIMIT_ORDER:
+            return LimitOrder(
+                id=data["orderId"],
+                symbol=data["symbol"],
+                status=data["status"],
+                price=float(data["price"]),
+                time_in_force=data["timeInForce"],
+                quantity=float(data["origQty"]),
+            )
+
     @property
     def side(self):
-        if isinstance(self.quantity, ClosePosition):
-            return str(self.quantity)
-        elif self.quantity > 0:
-            return BUY
-        else:
-            return SELL
+        if hasattr(self, "quantity"):
+            if self.quantity > 0:
+                return BUY
+            else:
+                return SELL
+        if hasattr(self, "close_side"):
+            return str(self.close_side)
 
-    @property
-    def is_limit(self):
-        return self.type in ("LIMIT", "TAKE_PROFIT", "STOP")
-
-    @classmethod
-    def from_binance(cls, data: dict):
-        return cls(
-            id=data["orderId"],
-            symbol=data["symbol"],
-            status=data["status"],
-            price=float(data["price"]),
-            stop_price=float(data["stopPrice"]),
-            time_in_force=data["timeInForce"],
-            quantity=float(data["origQty"]),
-            type=data["type"],
-        )
-
-    @classmethod
+    @staticmethod
     def market(
-        cls,
         symbol: str,
         quantity: float,
     ):
-        return cls(
+        return MarketOrder(
             symbol=symbol,
-            type="MARKET",
             quantity=quantity,
         )
 
-    @classmethod
+    @staticmethod
     def limit(
-        cls,
         symbol: str,
         quantity: float,
         price: float,
         time_in_force: Union[TimeInForce, str] = "GTC",
     ):
-        return cls(
+        return LimitOrder(
             symbol=symbol,
-            type="LIMIT",
             quantity=quantity,
             price=price,
             time_in_force=time_in_force,
         )
 
-    @classmethod
+    @staticmethod
     def stop_limit(
-        cls,
         symbol: str,
-        quantity: float,
         price: float,
         stop_price: float,
-        time_in_force: Union[TimeInForce, str] = "GTC",
     ):
-        return cls(
+        return StopLossLimitOrder(
             symbol=symbol,
-            type="STOP",
-            quantity=quantity,
             price=price,
             stop_price=stop_price,
-            time_in_force=time_in_force,
         )
 
-    @classmethod
+    @staticmethod
     def take_profit_limit(
-        cls,
         symbol: str,
-        quantity: float,
         price: float,
         stop_price: float,
-        time_in_force: Union[TimeInForce, str] = "GTC",
     ):
-        return cls(
+        return TakeProfitLimitOrder(
             symbol=symbol,
-            type="TAKE_PROFIT",
-            quantity=quantity,
             price=price,
             stop_price=stop_price,
-            time_in_force=time_in_force,
         )
 
-    @classmethod
+    @staticmethod
     def stop_market(
-        cls,
         symbol: str,
-        quantity: Union[float, ClosePosition],
         stop_price: float,
     ):
-        return cls(
+        return StopLossMarketOrder(
             symbol=symbol,
-            type="STOP_MARKET",
-            quantity=quantity,
             stop_price=stop_price,
         )
 
-    @classmethod
+    @staticmethod
     def take_profit_market(
-        cls,
         symbol: str,
-        quantity: Union[float, ClosePosition],
         stop_price: float,
     ):
-        return cls(
+        return TakeProfitMarketOrder(
             symbol=symbol,
-            type="TAKE_PROFIT_MARKET",
-            quantity=quantity,
             stop_price=stop_price,
         )
 
     def to_binance_order(self):
         dct = {
             "symbol": str(self.symbol),
-            "timeInForce": str(self.time_in_force),
-            "side": str(self.side).upper(),
             "type": str(self.type),
-            "price": str(self.price),
-            "stopPrice": str(self.stop_price),
         }
 
-        if isinstance(self.quantity, ClosePosition):
-            dct["closePosition"] = "true"
-        else:
-            dct["quantity"] = str(abs(self.quantity))
+        if hasattr(self, "time_in_force"):
+            dct["timeInForce"] = str(self.time_in_force)
+        if hasattr(self, "side"):
+            dct["side"] = str(self.side).upper()
+        if hasattr(self, "price"):
+            dct["price"] = str(self.price)
+        if hasattr(self, "stop_price"):
+            dct["stopPrice"] = str(self.stop_price)
+
+        if hasattr(self, "quantity"):
+            if isinstance(self.quantity, Side):
+                dct["closePosition"] = "true"
+            else:
+                dct["quantity"] = str(abs(self.quantity))
 
         return remove_none(dct)
+
+
+class MarketOrder(Order):
+
+    def __init__(
+            self,
+            symbol: Union[SymbolInfo, str],
+            quantity: float,
+            status=None,
+            id=None,
+    ):
+        super().__init__(
+            symbol=symbol,
+            type=MARKET_ORDER,
+            status=status,
+            id=id,
+        )
+        self.quantity = quantity
+
+
+class LimitOrder(Order):
+
+    __slots__ = "quantity", "price", "time_in_force"
+
+    def __init__(
+            self,
+            symbol: Union[SymbolInfo, str],
+            quantity: float,
+            price: float,
+            time_in_force: Union[str, TimeInForce] = "GTC",
+            status=None,
+            id=None,
+    ):
+        super().__init__(
+            symbol=symbol,
+            type=LIMIT_ORDER,
+            status=status,
+            id=id,
+        )
+        self.quantity = quantity
+        self.price = price
+        self.time_in_force = time_in_force
+
+
+class TakeProfitMarketOrder(Order):
+
+    __slots__ = "stop_price"
+
+    def __init__(
+            self,
+            symbol: Union[SymbolInfo, str],
+            stop_price: float,
+            status=None,
+            id=None,
+    ):
+        super().__init__(
+            symbol=symbol,
+            type=TAKE_PROFIT_MARKET_ORDER,
+            status=status,
+            id=id,
+        )
+        self.stop_price = stop_price
+
+
+class TakeProfitLimitOrder(Order):
+
+    __slots__ = "stop_price", "price"
+
+    def __init__(
+            self,
+            symbol: Union[SymbolInfo, str],
+            price: float,
+            stop_price: float,
+            status=None,
+            id=None,
+    ):
+        super().__init__(
+            symbol=symbol,
+            type=TAKE_PROFIT_LIMIT_ORDER,
+            status=status,
+            id=id,
+        )
+        self.stop_price = stop_price
+        self.price = price
+
+
+class StopLossMarketOrder(Order):
+
+    __slots__ = "stop_price"
+
+    def __init__(
+            self,
+            symbol: Union[SymbolInfo, str],
+            stop_price: float,
+            status=None,
+            id=None,
+    ):
+        super().__init__(
+            symbol=symbol,
+            type=STOP_LOSS_MARKET_ORDER,
+            status=status,
+            id=id,
+        )
+        self.stop_price = stop_price
+
+
+class StopLossLimitOrder(Order):
+
+    __slots__ = "stop_price", "price"
+
+    def __init__(
+            self,
+            symbol: Union[SymbolInfo, str],
+            price: float,
+            stop_price: float,
+            status=None,
+            id=None,
+    ):
+        super().__init__(
+            symbol=symbol,
+            type=STOP_LOSS_LIMIT_ORDER,
+            status=status,
+            id=id,
+        )
+        self.stop_price = stop_price
+        self.price = price
 
 
 def __stop_loss_take_profit_order(
     symbol: str, quantity: float, stop_price: float = None, profit_price: float = None
 ):
-    close_position_side = ClosePosition.SELL if quantity > 0 else ClosePosition.BUY
+    close_position_side = Side.SELL if quantity > 0 else Side.BUY
 
     orders = {}
     if stop_price is not None:
         stop_order = Order.stop_market(
             symbol=symbol,
-            quantity=close_position_side,
             stop_price=stop_price,
         )
         orders["stop_order"] = stop_order
@@ -293,7 +390,6 @@ def __stop_loss_take_profit_order(
     if profit_price is not None:
         profit_order = Order.take_profit_market(
             symbol=symbol,
-            quantity=close_position_side,
             stop_price=profit_price,
         )
         orders["profit_order"] = profit_order

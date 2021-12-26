@@ -3,8 +3,13 @@ from binance.client import Client
 from crypto_data.binance.pd.extract import get_candles
 from crypto_data.shared.candle_db import CandleDB
 
-from backtest import BacktestFuturesTrader, BacktestIndicator, run_backtest
-from backtest.futures_trader import EXIT_PROFIT_INDEX, ENTRY_SIDE_INDEX, create_position_array
+from backtest import (
+    BacktestFuturesTrader,
+    BacktestIndicator,
+    run_backtest,
+    positions_to_array,
+    PROFIT_INDEX
+)
 from consts.candle_column_index import *
 from model import Balance
 
@@ -20,7 +25,7 @@ def backtest_trading():
     interval = "1h"
     market = "FUTURES"
     skip = 256
-    trade_ratio = 0.5
+    trade_ratio = 0.1
     start_cash = 1000
 
     candle_db = CandleDB("data/binance_candles.db")
@@ -39,7 +44,7 @@ def backtest_trading():
         client=client,
         interval=interval,
         trade_ratio=trade_ratio,
-        balance=Balance(asset="USDT", balance=start_cash, free=start_cash),
+        balance=Balance(asset="USDT", total=start_cash, available=start_cash),
     )
     rsi_indicator = RSIIndicator()
     backtest_indicator = BacktestIndicator(candles=candles, indicator=rsi_indicator, skip=skip)
@@ -56,29 +61,32 @@ def backtest_trading():
     )
 
     candles_T = candles.T
-    positions = create_position_array(trader.positions)
-    capital = np.cumsum(positions[EXIT_PROFIT_INDEX]) + start_cash
+    positions = positions_to_array(trader.positions)
+
+    capital = np.cumsum(positions[PROFIT_INDEX]) + start_cash
 
     plot_backtest_results(
         candles=candles_T,
         positions=positions,
         start_cash=start_cash,
+        candlestick_plot=False,
     )
 
-    summary = Summary()
-    summary.print_price_summary(
-        open_time=candles_T[OPEN_TIME_INDEX],
-        open_price=candles_T[OPEN_PRICE_INDEX],
-        high_price=candles_T[HIGH_PRICE_INDEX],
-        low_price=candles_T[LOW_PRICE_INDEX],
-    )
-    summary.print_trade_summary(
-        start_cash=start_cash,
-        capital=capital,
-        side=positions[ENTRY_SIDE_INDEX],
-        profit=positions[EXIT_PROFIT_INDEX],
-    )
+    # summary = Summary()
+    # summary.print_price_summary(
+    #     open_time=candles_T[OPEN_TIME_INDEX],
+    #     open_price=candles_T[OPEN_PRICE_INDEX],
+    #     high_price=candles_T[HIGH_PRICE_INDEX],
+    #     low_price=candles_T[LOW_PRICE_INDEX],
+    # )
+    # summary.print_trade_summary(
+    #     start_cash=start_cash,
+    #     capital=capital,
+    #     side=positions[ENTRY_SIDE_INDEX],
+    #     profit=positions[EXIT_PROFIT_INDEX],
+    # )
 
 
 if __name__ == "__main__":
     backtest_trading()
+

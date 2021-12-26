@@ -27,11 +27,12 @@ class RSIStrategy(Strategy):
         result = self.rsi_indicator.result(candles)
         latest_rsi = result.tail(1)
 
-        signal = NONE
         if latest_rsi["buy_signal"].item():
             signal = BUY
         elif latest_rsi["sell_signal"].item():
             signal = SELL
+        else:
+            signal = NONE
 
         if signal != NONE and self.trader.get_position(trade_info.symbol) is None:
             self.trader.cancel_orders(trade_info.symbol)
@@ -52,19 +53,17 @@ class RSIStrategy(Strategy):
                 latest_close - 1000 if signal == SELL else latest_close + 1000
             )
 
-            self.trader.create_orders(
+            self.trader.create_position(
                 Order.market(
                     symbol=trade_info.symbol,
                     quantity=quantity,
                 ),
                 Order.take_profit_market(
                     symbol=trade_info.symbol,
-                    quantity=-quantity,
                     stop_price=take_profit_price,
                 ),
                 Order.stop_market(
                     symbol=trade_info.symbol,
-                    quantity=-quantity,
                     stop_price=stop_loss_price,
                 ),
             )

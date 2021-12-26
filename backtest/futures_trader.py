@@ -1,109 +1,18 @@
 import copy
-from typing import Callable, Optional, Iterable, List
+from typing import Callable, Optional, List, Union
 
 import numpy as np
 
 from binance.client import Client
 
 from abstract import FuturesTrader
+from backtest.position import BacktestPosition
 from consts.actions import SELL, BUY
 from consts.candle_column_index import *
-from model import Balance, Order, SymbolInfo
+from consts.order import LIMIT_ORDER, MARKET_ORDER
+from model import Balance, SymbolInfo
+from model.order import LimitOrder, MarketOrder, TakeProfitMarketOrder, StopLossMarketOrder
 from util.common import interval_to_seconds
-
-
-class TradeError(Exception):
-    def __init__(self, msg):
-        self.msg = msg
-
-
-class NotEnoughFundsError(Exception):
-    def __init__(self, msg):
-        self.msg = msg
-
-
-ENTRY_TIME_INDEX = 0
-ENTRY_PRICE_INDEX = 1
-ENTRY_QUANTITY_INDEX = 2
-ENTRY_SIDE_INDEX = 3
-ENTRY_LEVERAGE_INDEX = 4
-EXIT_TIME_INDEX = 5
-EXIT_PRICE_INDEX = 6
-EXIT_PROFIT_INDEX = 7
-
-
-class BacktestPosition:
-    __slots__ = ("entry_time", "entry_price", "entry_quantity", "entry_leverage", "exit_time", "exit_price")
-
-    def __init__(
-            self,
-            entry_time: int,
-            entry_price: float,
-            entry_quantity: float,
-            entry_leverage: int,
-    ):
-        self.entry_time = entry_time
-        self.entry_price = entry_price
-        self.entry_quantity = entry_quantity
-        self.entry_leverage = entry_leverage
-        self.exit_time: Optional[int] = None
-        self.exit_price: Optional[float] = None
-
-    @property
-    def side(self):
-        return BUY if self.entry_quantity > 0 else SELL
-
-    def set_exit(self, time: int, price: float):
-        self.exit_time = time
-        self.exit_price = price
-
-    @property
-    def exit_profit(self):
-        return (self.exit_price - self.entry_price) * self.entry_quantity * self.entry_leverage
-
-
-def create_position_array(positions: Iterable[BacktestPosition]):
-    return np.array([
-        tuple(position.entry_time for position in positions),
-        tuple(position.entry_price for position in positions),
-        tuple(position.entry_quantity for position in positions),
-        tuple(position.side for position in positions),
-        tuple(position.entry_leverage for position in positions),
-        tuple(position.exit_time for position in positions),
-        tuple(position.exit_price for position in positions),
-        tuple(position.exit_profit for position in positions),
-    ])
-
-
-def _is_limit_buy_hit(order: Order, low_price: float):
-    return order.side == BUY and low_price < order.price
-
-
-def _is_limit_sell_hit(order: Order, high_price: float):
-    return order.side == SELL and high_price > order.price
-
-
-def _is_stop_loss_hit(
-        order: Order,
-        position: BacktestPosition,
-        high_price: float,
-        low_price: float
-):
-    return (
-        high_price > order.stop_price
-        if position.side == SELL
-        else low_price < order.stop_price
-    )
-
-
-def _is_take_profit_hit(
-    order: Order, position: BacktestPosition, high_price: float, low_price: float
-):
-    return (
-        high_price > order.stop_price
-        if position.side == BUY
-        else low_price < order.stop_price
-    )
 
 
 class BacktestFuturesTrader(FuturesTrader, Callable):
@@ -112,22 +21,10 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         client: Client,
         interval: str,
         trade_ratio: float,
-        balance: Balance = Balance("USDT", balance=1_000, free=1_000),
+        balance: Balance = Balance("USDT", total=1_000, available=1_000),
         fee_ratio=0.001,
         leverage=1,
     ):
-        """
-        BacktestFuturesTrader class
-
-        :param client: Broker client
-        :param interval:
-        :param trade_ratio: Trade ratio, between 0 and 1
-        :param balance:
-        :param fee_ratio:
-        :param leverage:
-
-        Note: Try to avoid ratio values close to 0 or 1.
-        """
         super().__init__(trade_ratio)
         self.fee_ratio = fee_ratio
         self.client = client
@@ -143,134 +40,196 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         self.positions: List[BacktestPosition] = []
         self.position: Optional[BacktestPosition] = None
 
-        self.take_profit_order: Optional[Order] = None
-        self.stop_order: Optional[Order] = None
-        self.limit_order: Optional[Order] = None
+        self.market_order: Optional[MarketOrder] = None
+        self.stop_order: Optional[StopLossMarketOrder] = None
+        self.take_profit_order: Optional[TakeProfitMarketOrder] = None
+        self.limit_order: Optional[LimitOrder] = None
+
+        self.latest_open_time: float
+        self.latest_high_price: float
+        self.latest_low_price: float
+        self.latest_close_price: float
+
+    def _is_limit_buy_hit(self):
+        return (
+            self.limit_order.side == BUY
+            and self.latest_low_price < self.limit_order.price
+        )
+
+    def _is_limit_sell_hit(self):
+        return (
+            self.limit_order.side == SELL
+            and self.latest_high_price > self.limit_order.price
+        )
+
+    def _is_stop_loss_hit(self):
+        if self.stop_order is None:
+            return False
+
+        return (
+            self.latest_high_price > self.stop_order.stop_price
+            if self.position.side == SELL
+            else self.latest_low_price < self.stop_order.stop_price
+        )
+
+    def _is_take_profit_hit(self):
+        if self.take_profit_order is None:
+            return False
+
+        return (
+            self.latest_high_price > self.take_profit_order.stop_price
+            if self.position.side == BUY
+            else self.latest_low_price < self.take_profit_order.stop_price
+        )
+
+    def _create_position(self, price: float, quantity: float):
+        self.position = BacktestPosition(
+            entry_time=self.latest_open_time,
+            entry_price=price,
+            entry_quantity=quantity,
+            leverage=self._leverage,
+        )
+        self.balance.available -= price * abs(quantity)
+
+    def _adjust_position(self, price: float, quantity: float):
+        self.position.adjust(
+            time=self.latest_open_time,
+            price=price,
+            quantity=quantity,
+        )
+
+        if self.position.is_closed():
+            self.balance.total += self.position.calculate_profit(price)
+            self.balance.available = self.balance.total
+            self.positions.append(self.position)
+            self.position = None
+        else:
+            self.balance.available += price * quantity
+
+    def get_limit_order(self):
+        return self.limit_order
+
+    def get_take_profit_order(self):
+        return self.take_profit_order
+
+    def get_stop_loss_order(self):
+        return self.stop_order
+
+    def create_or_adjust_position(self, price: float, quantity: float):
+        if self.position is None:
+            self._create_position(
+                price=price,
+                quantity=quantity,
+            )
+        else:
+            self._adjust_position(
+                price=price,
+                quantity=quantity,
+            )
 
     def __call__(self, candles: np.ndarray):
-        self.candles = candles
         latest_candle = candles[-1]
-        high_price = latest_candle[HIGH_PRICE_INDEX]
-        low_price = latest_candle[LOW_PRICE_INDEX]
-        open_time = latest_candle[OPEN_TIME_INDEX]
+        self.latest_open_time = latest_candle[OPEN_TIME_INDEX]
+        self.latest_high_price = latest_candle[HIGH_PRICE_INDEX]
+        self.latest_low_price = latest_candle[LOW_PRICE_INDEX]
+        self.latest_close_price = latest_candle[CLOSE_PRICE_INDEX]
+
+        just_entered = False
+        if self.market_order is not None:
+            self.create_or_adjust_position(
+                price=self.latest_close_price,
+                quantity=self.market_order.quantity,
+            )
+            self.market_order = None
+            just_entered = True
 
         if self.limit_order is not None:
-            if (
-                _is_limit_sell_hit(self.limit_order, high_price=high_price)
-                or _is_limit_buy_hit(self.limit_order, low_price=low_price)
-            ):
-                if self.position is not None:
-                    close_time = latest_candle[OPEN_TIME_INDEX] + self._interval
-                    close_price = latest_candle[CLOSE_PRICE_INDEX]
-                    self.__close_position(time=close_time, price=close_price)
-
-                self.position = BacktestPosition(
-                    entry_time=open_time,
-                    entry_quantity=self.limit_order.quantity,
-                    entry_leverage=self._leverage,
-                    entry_price=self.limit_order.price,
+            if self._is_limit_sell_hit() or self._is_limit_buy_hit():
+                self.create_or_adjust_position(
+                    price=self.limit_order.price,
+                    quantity=self.limit_order.quantity,
                 )
+
                 self.limit_order = None
+                just_entered = True
 
-        elif self.position is not None:
-            tp_hit = self.take_profit_order is not None and _is_take_profit_hit(
-                order=self.take_profit_order,
-                position=self.position,
-                high_price=high_price,
-                low_price=low_price,
-            )
+        if self.position is not None and not just_entered:
+            take_profit_hit = self._is_take_profit_hit()
+            stop_hit = self._is_stop_loss_hit()
 
-            sl_hit = self.stop_order is not None and _is_stop_loss_hit(
-                order=self.stop_order,
-                position=self.position,
-                high_price=high_price,
-                low_price=low_price,
-            )
-
-            exit_time = open_time + self._interval
-            if tp_hit and sl_hit:
+            if take_profit_hit and stop_hit:
                 rand_choice = np.round(np.random.rand())
                 if rand_choice == 1:
-                    tp_hit = False
-            if tp_hit:
-                self._take_profit_or_loss(self.take_profit_order, exit_time)
-            elif sl_hit:
-                self._take_profit_or_loss(self.stop_order, exit_time)
-                if self.balance <= 0:
+                    take_profit_hit = False
+            if take_profit_hit:
+                self._close_position(self.take_profit_order.stop_price)
+                self.take_profit = None
+                self.stop_order = None
+            elif stop_hit:
+                self._close_position(self.stop_order.stop_price)
+                self.take_profit = None
+                self.stop_order = None
+
+                if self.balance.total <= 0:
+                    from backtest import NotEnoughFundsError
                     raise NotEnoughFundsError(
                         f"You got liquidated! Final balance: {self.balance}"
                     )
-
-    def _take_profit_or_loss(self, order: Order, exit_time: int):
-        if self.position is not None:
-            if order.type == "TAKE_PROFIT_MARKET":
-                self.take_profit_order = None
-            else:
-                self.stop_order = None
-
-            self.__close_position(time=exit_time, price=order.stop_price)
 
     def cancel_orders(self, symbol: str):
         self.limit_order = None
         self.take_profit_order = None
         self.stop_order = None
 
-    def create_orders(self, *orders: Order):
-        for order in orders:
-            if order.type == "MARKET":
-                latest_candle = self.candles[-1]
-                if self.position is not None:
-                    close_time = latest_candle[OPEN_TIME_INDEX] + self._interval
-                    close_price = latest_candle[CLOSE_PRICE_INDEX]
-                    self.__close_position(time=close_time, price=close_price)
+    def cancel_limit_order(self, symbol: str):
+        self.limit_order = None
 
-                self.position = BacktestPosition(
-                    entry_time=latest_candle[OPEN_TIME_INDEX],
-                    entry_quantity=order.quantity,
-                    entry_leverage=self._leverage,
-                    entry_price=latest_candle[CLOSE_PRICE_INDEX],
-                )
+    def cancel_take_profit_order(self, symbol: str):
+        self.take_profit_order = None
 
-            elif order.type == "LIMIT":
-                latest_close = self.candles[-1][CLOSE_PRICE_INDEX]
-                if (
-                    (order.side == BUY and order.price >= latest_close)
-                    or (order.side == SELL and order.price <= latest_close)
-                ):
-                    raise ValueError(
-                        "Incorrect order price. Order would immediately triggered."
-                    )
-                self.limit_order = order
-            elif order.type == "TAKE_PROFIT_MARKET":
-                self.take_profit_order = order
-            elif order.type == "STOP_MARKET":
-                self.stop_order = order
+    def cancel_stop_loss_orders(self, symbol: str):
+        self.stop_order = None
+
+    def create_position(
+            self,
+            order: Union[MarketOrder, LimitOrder],
+            take_profit_order: Optional[TakeProfitMarketOrder] = None,
+            stop_loss_order: Optional[StopLossMarketOrder] = None,
+    ):
+        if order.type == MARKET_ORDER:
+            self.market_order = order
+        elif order.type == LIMIT_ORDER:
+            self.limit_order = order
+
+        self.take_profit_order = take_profit_order
+        self.stop_order = stop_loss_order
+
+    def _close_position(self, price: float):
+        if self.position is not None:
+            self.position.close(
+                time=self.latest_open_time,
+                price=price,
+            )
+            self.balance.total += self.position.calculate_profit(price)
+            self.balance.available = self.balance.total
+            self.positions.append(self.position)
+            self.position = None
 
     def close_position(self):
-        if self.position is not None:
-            latest_candle = self.candles[-1]
-            close_time = latest_candle[OPEN_TIME_INDEX] + self._interval
-            close_price = latest_candle[CLOSE_PRICE_INDEX]
-            self.__close_position(time=close_time, price=close_price)
-
-    def __close_position(self, time, price):
-        self.position.set_exit(time=time, price=price)
-        self.balance += self.position.exit_profit
-        self.positions.append(self.position)
-        self.position = None
+        self._close_position(self.latest_close_price)
 
     def get_balances(self):
         return {"USDT": self.balance}
 
     def get_open_orders(self, symbol: str):
-        orders = []
+        open_orders = []
         if self.limit_order is not None:
-            orders.append(self.limit_order)
-        if self.take_profit_order is not None:
-            orders.append(self.take_profit_order)
-        if self.stop_order is not None:
-            orders.append(self.stop_order)
-        return orders
+            open_orders.append(self.limit_order)
+        elif self.take_profit_order is not None:
+            open_orders.append(self.take_profit_order)
+        elif self.stop_order is not None:
+            open_orders.append(self.stop_order)
+        return open_orders
 
     def _get_all_symbol_info(self):
         exchange_info: dict = self.client.futures_exchange_info()

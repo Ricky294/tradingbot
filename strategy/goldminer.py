@@ -90,7 +90,7 @@ class GoldMinerStrategy(Strategy):
                     else latest_close + latest_close * self.trader.trade_ratio
                 )
 
-                self.trader.create_orders(
+                self.trader.create_position(
                     Order.market(
                         symbol=trade_info.symbol,
                         quantity=quantity,

@@ -14,5 +14,5 @@ def run_backtest(
 
     for i in range(skip, len(candles)):
         candles_head = candles[:i+1]
-        strategy.trader(candles_head)
         strategy(candles_head)
+        strategy.trader(candles_head)

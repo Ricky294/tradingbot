@@ -1,17 +1,20 @@
 from typing import Union
 
+from consts import actions
 from consts.actions import BUY, SELL
 from model import Position
 from model.balance import Balance
 from model.order import OrderSide, OrderError, Order
 
 
+def side_based_on_quantity(quantity: Union[float, int]):
+    return actions.BUY if quantity > 0 else actions.SELL
+
+
 def calculate_quantity(
     side: int, balance: Balance, price: float, percentage: float, leverage: int = 1
 ):
-    # Be cautious! It's only works if you do not have ANY open orders/positions in place.
-    # If you have open orders/position you need a more complex calculation considering other factors as well.
-    quantity = balance.free / price * percentage * leverage
+    quantity = balance.available / price * percentage * leverage
     return quantity if side == BUY else -quantity
 
 
