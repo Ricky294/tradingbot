@@ -101,13 +101,25 @@ def plot_results(
         exit_time = pd.to_datetime(exit_time, unit="s")
 
         max_row = 2
-        extra_graph_max_row = max((graph.row_index for graph in extra_graphs))
+
+        extra_graph_max_row = 0
+
+        if extra_graphs is not None:
+            extra_graph_max_row = max((graph.row_index for graph in extra_graphs))
 
         if extra_graph_max_row > 2:
             max_row = extra_graph_max_row
 
         row_heights = [1 for _ in range(max_row)]
         row_heights[1] = 2
+
+        specs = [
+            [{"type": "scatter"}],
+            [{"secondary_y": True}],
+        ]
+
+        if extra_graphs is not None:
+            specs.append([{"type": graph.graph_type.lower() for graph in extra_graphs}])
 
         fig = make_subplots(
             rows=max_row, cols=1,
@@ -116,11 +128,7 @@ def plot_results(
             shared_xaxes=True,
             horizontal_spacing=0.0,
             vertical_spacing=0.02,
-            specs=[
-                [{"type": "scatter"}],
-                [{"secondary_y": True}],
-                [{"type": graph.graph_type.lower() for graph in extra_graphs}],
-            ]
+            specs=specs,
         )
 
         fig.add_trace(
