@@ -1,3 +1,6 @@
+import importlib
+from typing import List
+
 import numpy as np
 import pandas as pd
 
@@ -13,7 +16,10 @@ from backtest import (
     PRICE_INDEX,
     QUANTITY_INDEX,
     EXIT_TIME_INDEX,
-    EXIT_PRICE_INDEX, SIDE_INDEX, PROFIT_INDEX, EXIT_QUANTITY_INDEX
+    EXIT_PRICE_INDEX,
+    SIDE_INDEX,
+    PROFIT_INDEX,
+    EXIT_QUANTITY_INDEX,
 )
 from consts.candle_column_index import (
     OPEN_TIME_INDEX,
@@ -24,243 +30,265 @@ from consts.candle_column_index import (
     VOLUME_INDEX,
 )
 from plot.transform import assign_where_not_zero
-from util.numpy import map_match
+from statistics.basic import (
+    win_loss_rate,
+    biggest_looser,
+    biggest_winner,
+)
+from util.numpy_util import map_match
+
+
+class ExtraGraph:
+
+    def __init__(self, row_index: int, graph_type: str, graph_params: dict):
+        self.row_index = row_index
+        self.graph_params = graph_params
+        self.graph_type = graph_type
 
 
 def __create_custom_data(*arrays: np.ndarray):
     return np.stack(tuple(arrays), axis=-1)
 
 
-def create_plots(
-        candles: np.ndarray,
-        entry_time: np.ndarray,
-        entry_price: np.ndarray,
-        entry_quantity: np.ndarray,
-        entry_side: np.ndarray,
-        middle_time: np.ndarray,
-        middle_price: np.ndarray,
-        middle_quantity: np.ndarray,
-        exit_time: np.ndarray,
-        exit_price: np.ndarray,
-        exit_quantity: np.ndarray,
-        profit: np.ndarray,
-        capital: np.ndarray,
-        candlestick_plot=True,
-        volume_bar_plot=True,
-):
-    high_price = candles[HIGH_PRICE_INDEX]
-    low_price = candles[LOW_PRICE_INDEX]
-    open_time = candles[OPEN_TIME_INDEX]
-    close_price = candles[CLOSE_PRICE_INDEX]
-    volume = candles[VOLUME_INDEX]
-
-    if candlestick_plot and (high_price is None or low_price is None):
-        raise ValueError("high_price and low_price parameter is required if candlestick_plot is True")
-
-    open_time = pd.to_datetime(open_time, unit="s")
-    entry_time = pd.to_datetime(entry_time, unit="s")
-    middle_time = pd.to_datetime(middle_time, unit="s")
-    exit_time = pd.to_datetime(exit_time, unit="s")
-
-    candlestick_plot_type = "candlestick" if candlestick_plot else "scatter"
-    volume_bar_plot_type = "bar" if volume_bar_plot else "scatter"
-
-    fig = make_subplots(
-        rows=3, cols=1,
-        column_widths=[1.0],
-        row_heights=[0.2, 0.6, 0.2],
-        shared_xaxes=True,
-        horizontal_spacing=0.0,
-        vertical_spacing=0.02,
-        specs=[
-            [{"type": "scatter"}],
-            [{"type": candlestick_plot_type}],
-            [{"type": volume_bar_plot_type}],
-        ]
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=open_time,
-            y=capital,
-            name="Capital",
-        ),
-        row=1, col=1,
-    )
-
-    if candlestick_plot:
-        open_price = candles[OPEN_PRICE_INDEX]
-        fig.add_trace(
-            go.Candlestick(
-                x=open_time,
-                open=open_price,
-                high=high_price,
-                low=low_price,
-                close=close_price,
-                name="Candles"
-            ),
-            row=2, col=1,
-        )
-    else:
-        fig.add_trace(
-            go.Scatter(
-                x=open_time,
-                y=close_price,
-                marker={"color": "#444"},
-                name="Close prices",
-            ),
-            row=2, col=1,
-        )
-
-    low_or_close_price = low_price if candlestick_plot else close_price
-    fig.add_trace(
-        go.Scatter(
-            x=entry_time,
-            y=low_or_close_price * 0.9,
-            name="Entry",
-            mode="markers",
-            marker={"color": "#3d8f6d", "symbol": "triangle-up"},
-            customdata=__create_custom_data(entry_price, entry_side, entry_quantity),
-            hovertemplate="<br>".join((
-                "%{x}",
-                "Price: %{customdata[0]:.2f}",
-                "Side: %{customdata[1]}",
-                "Quantity: %{customdata[2]:.3f}",
-            )),
-        ),
-        row=2, col=1,
-    )
-
-    fig.add_trace(
-        go.Scatter(
-            x=middle_time,
-            y=low_or_close_price * 0.9,
-            name="Adjust",
-            mode="markers",
-            marker={"color": "#ff9000", "symbol": "triangle-up"},
-            customdata=__create_custom_data(middle_price, middle_quantity),
-            hovertemplate="<br>".join((
-                "%{x}",
-                "Price: %{customdata[0]:.2f}",
-                "Quantity: %{customdata[1]:.3f}",
-            )),
-        ),
-        row=2, col=1,
-    )
-
-    high_or_close_price = high_price if candlestick_plot else close_price
-    fig.add_trace(
-        go.Scatter(
-            x=exit_time,
-            y=high_or_close_price * 1.1,
-            name="Exit",
-            mode="markers",
-            marker=dict(
-                color="red",
-                symbol="triangle-down",
-            ),
-            customdata=__create_custom_data(exit_price, exit_quantity, profit),
-            hovertemplate="<br>".join((
-                "%{x}",
-                "Price: %{customdata[0]:.2f}",
-                "Quantity: %{customdata[1]:.2f}",
-                "Profit: %{customdata[2]:.2f}",
-            ))
-        ),
-        row=2, col=1,
-    )
-    fig.update_xaxes(rangeslider={'visible': False}, row=2, col=1)
-
-    if volume_bar_plot:
-        fig.add_trace(
-            go.Bar(
-                x=open_time,
-                y=volume,
-                name="Volume",
-                marker={"color": "#2CA02C"},
-            ),
-            row=3, col=1,
-        )
-    else:
-        fig.add_trace(
-            go.Scatter(
-                x=open_time,
-                y=volume,
-                name="Volume",
-                marker={"color": "#2CA02C"},
-            ),
-            row=3, col=1,
-        )
-
-    fig.update_yaxes(tickformat=',.2f')
-
-    fig.update_layout(
-        margin=dict(l=10, r=10, t=20, b=10),
-    )
-
-    return fig
-
-
-def plot_backtest_results(
+def plot_results(
         candles: np.ndarray,
         positions: np.ndarray,
         add_or_reduce_positions: np.ndarray,
         start_cash: float,
+        extra_graphs: List[ExtraGraph] = None,
         candlestick_plot=False,
-        volume_bar_plot=False,
 ):
-    entry_time = positions[TIME_INDEX]
-    entry_price = positions[PRICE_INDEX]
-    quantity = positions[QUANTITY_INDEX]
-
-    middle_time = add_or_reduce_positions[TIME_INDEX]
-    middle_price = add_or_reduce_positions[PRICE_INDEX]
-    middle_quantity = add_or_reduce_positions[QUANTITY_INDEX]
-
-    exit_time = positions[EXIT_TIME_INDEX]
-    exit_price = positions[EXIT_PRICE_INDEX]
-    exit_quantity = positions[EXIT_QUANTITY_INDEX]
-    side = positions[SIDE_INDEX]
-    profit = positions[PROFIT_INDEX]
 
     candle_open_times = candles[OPEN_TIME_INDEX]
 
-    ext_entry_time = map_match(candle_open_times, entry_time)
-    ext_exit_time = map_match(candle_open_times, exit_time)
-    ext_middle_time = map_match(candle_open_times, middle_time)
+    entry_time = map_match(candle_open_times, positions[TIME_INDEX])
+    entry_price = assign_where_not_zero(entry_time, positions[PRICE_INDEX])
+    quantity = assign_where_not_zero(entry_time, positions[QUANTITY_INDEX])
+    side = assign_where_not_zero(entry_time, positions[SIDE_INDEX])
 
-    ext_entry_data = {
-        key: assign_where_not_zero(ext_entry_time, val)
-        for key, val in {"entry_price": entry_price, "entry_quantity": quantity, "entry_side": side}.items()
-    }
-    ext_middle_data = {
-        key: assign_where_not_zero(ext_middle_time, val)
-        for key, val in {"middle_price": middle_price, "middle_quantity": middle_quantity}.items()
-    }
-    ext_exit_data = {
-        key: assign_where_not_zero(ext_exit_time, val)
-        for key, val in {"exit_price": exit_price, "exit_quantity": exit_quantity, "profit": profit}.items()
-    }
+    middle_time = map_match(candle_open_times, add_or_reduce_positions[TIME_INDEX])
+    middle_quantity = assign_where_not_zero(middle_time, add_or_reduce_positions[QUANTITY_INDEX])
+    middle_price = assign_where_not_zero(middle_time, add_or_reduce_positions[PRICE_INDEX])
 
-    ext_capital = np.cumsum(ext_exit_data["profit"]) + start_cash
+    exit_time = map_match(candle_open_times, positions[EXIT_TIME_INDEX])
+    exit_price = assign_where_not_zero(exit_time, positions[EXIT_PRICE_INDEX])
+    exit_quantity = assign_where_not_zero(exit_time, positions[EXIT_QUANTITY_INDEX])
+    profit = assign_where_not_zero(exit_time, positions[PROFIT_INDEX])
 
-    ext_entry_time[ext_entry_time == 0.0] = np.nan
-    ext_middle_time[ext_middle_time == 0.0] = np.nan
-    ext_exit_time[ext_exit_time == 0.0] = np.nan
+    capital = np.cumsum(profit) + start_cash
 
-    fig = create_plots(
-        candles=candles,
-        candlestick_plot=candlestick_plot,
-        volume_bar_plot=volume_bar_plot,
-        capital=ext_capital,
-        entry_time=ext_entry_time,
-        exit_time=ext_exit_time,
-        middle_time=ext_middle_time,
-        **ext_entry_data,
-        **ext_exit_data,
-        **ext_middle_data,
-    )
+    entry_time[entry_time == 0.0] = np.nan
+    middle_time[middle_time == 0.0] = np.nan
+    exit_time[exit_time == 0.0] = np.nan
 
+    def create_plots():
+        nonlocal entry_time
+        nonlocal middle_time
+        nonlocal exit_time
+
+        high_price = candles[HIGH_PRICE_INDEX]
+        low_price = candles[LOW_PRICE_INDEX]
+        open_time = candles[OPEN_TIME_INDEX]
+        close_price = candles[CLOSE_PRICE_INDEX]
+        volume = candles[VOLUME_INDEX]
+
+        if candlestick_plot and (high_price is None or low_price is None):
+            raise ValueError("high_price and low_price parameter is required if candlestick_plot is True")
+
+        open_time = pd.to_datetime(open_time, unit="s")
+        entry_time = pd.to_datetime(entry_time, unit="s")
+        middle_time = pd.to_datetime(middle_time, unit="s")
+        exit_time = pd.to_datetime(exit_time, unit="s")
+
+        max_row = 2
+        extra_graph_max_row = max((graph.row_index for graph in extra_graphs))
+
+        if extra_graph_max_row > 2:
+            max_row = extra_graph_max_row
+
+        row_heights = [1 for _ in range(max_row)]
+        row_heights[1] = 2
+
+        fig = make_subplots(
+            rows=max_row, cols=1,
+            column_widths=[1.0],
+            row_heights=row_heights,
+            shared_xaxes=True,
+            horizontal_spacing=0.0,
+            vertical_spacing=0.02,
+            specs=[
+                [{"type": "scatter"}],
+                [{"secondary_y": True}],
+                [{"type": graph.graph_type.lower() for graph in extra_graphs}],
+            ]
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=open_time,
+                y=capital,
+                name="Capital",
+            ),
+            row=1, col=1,
+        )
+
+        if candlestick_plot:
+            open_price = candles[OPEN_PRICE_INDEX]
+            fig.add_trace(
+                go.Candlestick(
+                    x=open_time,
+                    open=open_price,
+                    high=high_price,
+                    low=low_price,
+                    close=close_price,
+                    name="Candles"
+                ),
+                row=2, col=1,
+                secondary_y=False,
+            )
+        else:
+            fig.add_trace(
+                go.Scatter(
+                    x=open_time,
+                    y=close_price,
+                    marker={"color": "#444"},
+                    name="Close prices",
+                ),
+                row=2, col=1,
+                secondary_y=False,
+            )
+
+        low_or_close_price = low_price if candlestick_plot else close_price
+        fig.add_trace(
+            go.Scatter(
+                x=entry_time,
+                y=low_or_close_price * 0.9,
+                name="Entry",
+                mode="markers",
+                marker={"color": "#3d8f6d", "symbol": "triangle-up"},
+                customdata=__create_custom_data(entry_price, side, quantity),
+                hovertemplate="<br>".join((
+                    "%{x}",
+                    "Price: %{customdata[0]:.2f}",
+                    "Side: %{customdata[1]}",
+                    "Quantity: %{customdata[2]:.3f}",
+                )),
+            ),
+            secondary_y=False,
+            row=2, col=1,
+        )
+
+        fig.add_trace(
+            go.Scatter(
+                x=middle_time,
+                y=low_or_close_price * 0.9,
+                name="Adjust",
+                mode="markers",
+                marker={"color": "#ff9000", "symbol": "triangle-up"},
+                customdata=__create_custom_data(middle_price, middle_quantity),
+                hovertemplate="<br>".join((
+                    "%{x}",
+                    "Price: %{customdata[0]:.2f}",
+                    "Quantity: %{customdata[1]:.3f}",
+                )),
+            ),
+            secondary_y=False,
+            row=2, col=1,
+        )
+
+        high_or_close_price = high_price if candlestick_plot else close_price
+        fig.add_trace(
+            go.Scatter(
+                x=exit_time,
+                y=high_or_close_price * 1.1,
+                name="Exit",
+                mode="markers",
+                marker=dict(
+                    color="red",
+                    symbol="triangle-down",
+                ),
+                customdata=__create_custom_data(exit_price, exit_quantity, profit),
+                hovertemplate="<br>".join((
+                    "%{x}",
+                    "Price: %{customdata[0]:.2f}",
+                    "Quantity: %{customdata[1]:.2f}",
+                    "Profit: %{customdata[2]:.2f}",
+                ))
+            ),
+            secondary_y=False,
+            row=2, col=1,
+        )
+        fig.update_xaxes(rangeslider={'visible': False}, row=2, col=1)
+
+        fig.add_trace(
+            go.Scatter(
+                x=open_time,
+                y=volume,
+                name="Volume",
+                marker={"color": "#2CA02C"},
+                opacity=0.15,
+                hoverinfo='skip',
+            ),
+            secondary_y=True,
+            row=2, col=1,
+        )
+
+        if extra_graphs is not None:
+            for graph in extra_graphs:
+                graph_module = importlib.import_module(f'plotly.graph_objects')
+                graph_class = getattr(graph_module, graph.graph_type.capitalize())
+                fig.add_trace(
+                    graph_class(
+                        x=open_time,
+                        **graph.graph_params
+                    ),
+                    row=graph.row_index, col=1,
+                )
+
+        fig.update_layout(
+            margin=dict(l=10, r=10, t=20, b=10),
+        )
+        fig.update_yaxes(tickformat=',.2f', visible=False, showticklabels=False, secondary_y=True)
+        fig.layout.yaxis2.showgrid = False
+
+        return fig
+
+    def include_info_on_figure():
+        wins, losses, win_rate = win_loss_rate(profit)
+        biggest_loss = biggest_looser(profit)
+        biggest_win = biggest_winner(profit)
+
+        fig.add_annotation(
+            text="<br>".join([
+                f"Wins: {wins}, Losses: {losses}, Win rate: {win_rate:.2f}",
+                f"Largest win: {biggest_win:.2f}, Largest loss: {biggest_loss:.2f}",
+            ]),
+            align="left",
+            xref="x domain", yref="y domain",
+            font=dict(
+                size=8,
+            ),
+            x=0.005, y=0.99, showarrow=False,
+            row=2, col=1,
+        )
+
+        percentage_profit = ((capital[-1] - start_cash) / start_cash) * 100
+
+        fig.add_annotation(
+            text="<br>".join([
+                f"Final balance: {capital[-1]:.2f} ({'+' if percentage_profit > 0 else ''}{percentage_profit:.3f}%)",
+            ]),
+            align="left",
+            xref="x domain", yref="y domain",
+            font=dict(
+                size=8,
+            ),
+            x=0.005, y=0.99, showarrow=False,
+            row=1, col=1,
+        )
+
+    fig = create_plots()
+    include_info_on_figure()
     fig.show()
 
 

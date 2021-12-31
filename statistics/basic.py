@@ -29,10 +29,11 @@ def return_on_investment(start_cash: float, capital: np.ndarray):
     return last_capital - start_cash, last_capital / start_cash
 
 
-def win_loss_ratio(profit: np.ndarray):
+def win_loss_rate(profit: np.ndarray):
     wins = len(profit[profit > 0])
     losses = len(profit[profit < 0])
-    return wins, losses, wins / losses
+
+    return wins, losses, wins / (wins + losses)
 
 
 def maximum_drawdown():
@@ -42,14 +43,3 @@ def maximum_drawdown():
 def drawdowns_greater_than():
     pass
 
-
-"""
-n = 1000
-xs = np.random.randn(n).cumsum()
-i = np.argmax(np.maximum.accumulate(xs) - xs)   # end of the period
-j = np.argmax(xs[:i])                           # start of period
-
-plt.plot(xs)
-plt.plot([i, j], [xs[i], xs[j]], 'o', color='Red', markersize=10)
-plt.show()
-"""

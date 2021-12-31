@@ -1,14 +1,12 @@
 import numpy as np
 import pandas as pd
-try:
-    import talib
-except ImportError:
-    print("Could not find talib package.")
+import talib
+
 from crypto_data.binance.schema import CLOSE_PRICE
 
 from consts.candle_column_index import COLUMN_NAME_INDEX_MAP
 from indicator import Indicator
-from util.numpy import cross_signal
+from util.numpy_util import cross_signal, Fit
 
 
 class RSIIndicator(Indicator):
@@ -26,8 +24,9 @@ class RSIIndicator(Indicator):
 
     def result(self, candles: np.ndarray):
         rsi = talib.RSI(candles.T[self.column_index], timeperiod=self.time_period)
-        buy_signal_line = cross_signal(rsi, ">=", self.lower_limit)
-        sell_signal_line = cross_signal(rsi, "<=", self.upper_limit)
+
+        buy_signal_line = cross_signal(rsi, "<=", self.lower_limit, Fit.AFTER_LAST)
+        sell_signal_line = cross_signal(rsi, ">=", self.upper_limit, Fit.AFTER_LAST)
 
         indicator_df = pd.DataFrame(
             {

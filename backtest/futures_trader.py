@@ -45,7 +45,7 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         self.take_profit_order: Optional[TakeProfitMarketOrder] = None
         self.limit_order: Optional[LimitOrder] = None
 
-        self.latest_open_time: float
+        self.latest_open_time: int
         self.latest_high_price: float
         self.latest_low_price: float
         self.latest_close_price: float
@@ -67,9 +67,9 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
             return False
 
         return (
-            self.latest_high_price > self.stop_order.stop_price
-            if self.position.side == SELL
-            else self.latest_low_price < self.stop_order.stop_price
+            self.latest_low_price < self.stop_order.stop_price
+            if self.position.side == BUY
+            else self.latest_high_price > self.stop_order.stop_price
         )
 
     def _is_take_profit_hit(self):
@@ -158,9 +158,19 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
             stop_hit = self._is_stop_loss_hit()
 
             if take_profit_hit and stop_hit:
-                rand_choice = np.round(np.random.rand())
-                if rand_choice == 1:
+                open_price = latest_candle[OPEN_PRICE_INDEX]
+
+                high_distance = self.latest_high_price - open_price
+                low_distance = open_price - self.latest_low_price
+
+                take_profit_distance = abs(open_price - self.take_profit_order.stop_price)
+                stop_loss_distance = abs(open_price - self.stop_order.stop_price)
+
+                if high_distance / take_profit_distance > low_distance / stop_loss_distance:
+                    stop_hit = False
+                else:
                     take_profit_hit = False
+
             if take_profit_hit:
                 self._close_position(self.take_profit_order.stop_price)
                 self.take_profit = None

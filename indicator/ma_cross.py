@@ -10,7 +10,7 @@ except ImportError:
 from crypto_data.binance.schema import CLOSE_PRICE
 
 from indicator import Indicator
-from util.numpy import cross_signal
+from util.numpy_util import cross_signal
 
 
 class MAType(Enum):

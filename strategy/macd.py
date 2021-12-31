@@ -9,26 +9,23 @@ from abstract import FuturesTrader
 from util.trade import calculate_quantity
 
 
-class RSIStrategy(Strategy):
+class MACDStrategy(Strategy):
     def __init__(
-            self,
-            symbol: str,
-            trader: FuturesTrader,
-            indicator: Indicator
+        self, symbol: str, trader: FuturesTrader, macd_indicator: Indicator
     ):
         super().__init__(symbol=symbol, trader=trader)
-        self.indicator = indicator
+        self.macd_indicator = macd_indicator
 
     def __call__(
-            self,
-            candles: np.ndarray,
+        self,
+        candles: np.ndarray,
     ):
-        result = self.indicator.result(candles)
-        latest_rsi = result.tail(1)
+        result = self.macd_indicator.result(candles)
+        latest_macd = result.tail(1)
 
-        if latest_rsi["buy_signal"].item():
+        if latest_macd["buy_signal"].item():
             signal = BUY
-        elif latest_rsi["sell_signal"].item():
+        elif latest_macd["sell_signal"].item():
             signal = SELL
         else:
             signal = NONE
@@ -46,10 +43,10 @@ class RSIStrategy(Strategy):
             )
 
             stop_loss_price = (
-                latest_close - 400 if signal == BUY else latest_close + 400
+                latest_close - 1000 if signal == BUY else latest_close + 1000
             )
             take_profit_price = (
-                latest_close - 400 if signal == SELL else latest_close + 400
+                latest_close - 1000 if signal == SELL else latest_close + 1000
             )
 
             self.trader.create_position(

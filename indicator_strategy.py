@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 from binance.client import Client
 from crypto_data.binance.pd.extract import get_candles
 from crypto_data.shared.candle_db import CandleDB
@@ -8,17 +9,18 @@ from backtest import (
     BacktestIndicator,
     run_backtest,
     positions_to_array,
-    PROFIT_INDEX,
 )
-from backtest.transform_positions import add_or_reduce_positions_to_array
+from backtest.transform_positions import add_or_reduce_positions_to_array, SIDE_INDEX
 from consts.candle_column_index import *
 from model import Balance
 
-from indicator import RSIIndicator
-from plot.plotly import plot_backtest_results
-from statistics.summary import Summary
+from indicator import RSIIndicator, MACDIndicator
+from plot.plotly import plot_results, ExtraGraph
+
 from strategy import RSIStrategy
+from strategy.macd import MACDStrategy
 from util.common import read_config
+import plotly.graph_objects as go
 
 
 def backtest_trading():
@@ -47,13 +49,13 @@ def backtest_trading():
         trade_ratio=trade_ratio,
         balance=Balance(asset="USDT", total=start_cash, available=start_cash),
     )
-    rsi_indicator = RSIIndicator()
-    backtest_indicator = BacktestIndicator(candles=candles, indicator=rsi_indicator, skip=skip)
+    indicator = RSIIndicator()
+    backtest_indicator = BacktestIndicator(candles=candles, indicator=indicator, skip=skip)
 
     strategy = RSIStrategy(
         symbol=symbol,
         trader=trader,
-        rsi_indicator=backtest_indicator,
+        indicator=backtest_indicator,
     )
 
     run_backtest(
@@ -61,32 +63,23 @@ def backtest_trading():
         strategy=strategy,
     )
 
-    candles_T = candles.T
-    position_series = positions_to_array(trader.positions)
-    add_reduce_position_series = add_or_reduce_positions_to_array(trader.positions)
-    capital = np.cumsum(position_series[PROFIT_INDEX]) + start_cash
-
-    plot_backtest_results(
-        candles=candles_T,
-        positions=position_series,
-        add_or_reduce_positions=add_reduce_position_series,
+    plot_results(
+        candles=candles.T,
+        positions=positions_to_array(trader.positions),
+        add_or_reduce_positions=add_or_reduce_positions_to_array(trader.positions),
         start_cash=start_cash,
         candlestick_plot=False,
+        extra_graphs=[
+            ExtraGraph(
+                row_index=3,
+                graph_type="scatter",
+                graph_params=dict(
+                    y=backtest_indicator.indicator_data["rsi"],
+                    name="RSI",
+                ),
+            ),
+        ],
     )
-
-    # summary = Summary()
-    # summary.print_price_summary(
-    #     open_time=candles_T[OPEN_TIME_INDEX],
-    #     open_price=candles_T[OPEN_PRICE_INDEX],
-    #     high_price=candles_T[HIGH_PRICE_INDEX],
-    #     low_price=candles_T[LOW_PRICE_INDEX],
-    # )
-    # summary.print_trade_summary(
-    #     start_cash=start_cash,
-    #     capital=capital,
-    #     side=positions[ENTRY_SIDE_INDEX],
-    #     profit=positions[EXIT_PROFIT_INDEX],
-    # )
 
 
 if __name__ == "__main__":
