@@ -58,7 +58,6 @@ def plot_results(
         extra_graphs: List[ExtraGraph] = None,
         candlestick_plot=False,
 ):
-
     candle_open_times = candles[OPEN_TIME_INDEX]
 
     entry_time = map_match(candle_open_times, positions[TIME_INDEX])
@@ -119,7 +118,7 @@ def plot_results(
         ]
 
         if extra_graphs is not None:
-            specs.append([{"type": graph.graph_type.lower() for graph in extra_graphs}])
+            specs.extend([[{"type": graph.graph_type.lower()}] for graph in extra_graphs])
 
         fig = make_subplots(
             rows=max_row, cols=1,
@@ -151,8 +150,8 @@ def plot_results(
                     close=close_price,
                     name="Candles"
                 ),
-                row=2, col=1,
                 secondary_y=False,
+                row=2, col=1,
             )
         else:
             fig.add_trace(
@@ -234,7 +233,7 @@ def plot_results(
                 y=volume,
                 name="Volume",
                 marker={"color": "#2CA02C"},
-                opacity=0.15,
+                opacity=0.2,
                 hoverinfo='skip',
             ),
             secondary_y=True,
