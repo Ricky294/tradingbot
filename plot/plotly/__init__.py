@@ -40,7 +40,7 @@ from util.numpy_util import map_match
 
 class ExtraGraph:
 
-    def __init__(self, row_index: int, graph_type: str, graph_params: dict):
+    def __init__(self, row_index: int, graph_type: str, graph_params: List[dict]):
         self.row_index = row_index
         self.graph_params = graph_params
         self.graph_type = graph_type
@@ -244,13 +244,15 @@ def plot_results(
             for graph in extra_graphs:
                 graph_module = importlib.import_module(f'plotly.graph_objects')
                 graph_class = getattr(graph_module, graph.graph_type.capitalize())
-                fig.add_trace(
-                    graph_class(
-                        x=open_time,
-                        **graph.graph_params
-                    ),
-                    row=graph.row_index, col=1,
-                )
+
+                for params in graph.graph_params:
+                    fig.add_trace(
+                        graph_class(
+                            x=open_time,
+                            **params,
+                        ),
+                        row=graph.row_index, col=1,
+                    )
 
         fig.update_layout(
             margin=dict(l=10, r=10, t=20, b=10),

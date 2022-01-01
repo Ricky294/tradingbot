@@ -63,6 +63,12 @@ def backtest_trading():
         strategy=strategy,
     )
 
+    upper_rsi_series = np.empty(candles.shape[0])
+    upper_rsi_series.fill(70)
+
+    lower_rsi_series = np.empty(candles.shape[0])
+    lower_rsi_series.fill(30)
+
     plot_results(
         candles=candles.T,
         positions=positions_to_array(trader.positions),
@@ -73,10 +79,22 @@ def backtest_trading():
             ExtraGraph(
                 row_index=3,
                 graph_type="scatter",
-                graph_params=dict(
-                    y=backtest_indicator.indicator_data["rsi"],
-                    name="RSI",
-                ),
+                graph_params=[
+                    dict(
+                        y=backtest_indicator.indicator_data["rsi"],
+                        name="RSI",
+                    ),
+                    dict(
+                        y=upper_rsi_series,
+                        name="Upper RSI",
+                        marker={"color": "blue"},
+                    ),
+                    dict(
+                        y=lower_rsi_series,
+                        name="Lower RSI",
+                        marker={"color": "blue"},
+                    ),
+                ]
             ),
         ],
     )
