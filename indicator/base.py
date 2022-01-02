@@ -10,5 +10,5 @@ class Indicator(ABC):
         pass
 
     @abstractmethod
-    def result(self, candle_df: np.ndarray) -> pd.DataFrame:
+    def result(self, candles: np.ndarray) -> pd.DataFrame:
         pass

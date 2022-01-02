@@ -3,6 +3,7 @@ from typing import Dict, List, Optional
 from binance.client import Client
 
 from abstract import FuturesTrader
+from binance_.helpers import get_symbol_info
 from model import Order, Balance, Position, SymbolInfo
 
 
@@ -90,14 +91,7 @@ class BinanceFuturesTrader(FuturesTrader):
         return [SymbolInfo(**symbol_info) for symbol_info in exchange_info["symbols"]]
 
     def get_symbol_info(self, symbol: str) -> Optional[SymbolInfo]:
-        exchange_info: dict = self.client.futures_exchange_info()
-
-        symbol = symbol.upper()
-        for symbol_info in exchange_info["symbols"]:
-            if symbol_info["symbol"] == symbol:
-                return SymbolInfo(**symbol_info)
-
-        raise ValueError(f"Invalid symbol: {symbol}")
+        return get_symbol_info(self.client, symbol)
 
     def set_leverage(self, symbol: str, leverage: int):
         self.client.futures_change_leverage(symbol=symbol, leverage=leverage)

@@ -25,8 +25,8 @@ class RSIIndicator(Indicator):
     def result(self, candles: np.ndarray):
         rsi = talib.RSI(candles.T[self.column_index], timeperiod=self.time_period)
 
-        buy_signal_line = cross_signal(rsi, "<=", self.lower_limit, Fit.AFTER_LAST)
-        sell_signal_line = cross_signal(rsi, ">=", self.upper_limit, Fit.AFTER_LAST)
+        sell_signal_line = cross_signal(rsi, ">=", self.upper_limit, Fit.FIRST)
+        buy_signal_line = cross_signal(rsi, "<=", self.lower_limit, Fit.FIRST)
 
         indicator_df = pd.DataFrame(
             {

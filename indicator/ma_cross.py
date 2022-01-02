@@ -1,22 +1,13 @@
-from enum import Enum
 from typing import Union
 
 import numpy as np
 import pandas as pd
-try:
-    import talib
-except ImportError:
-    print("Could not find talib package.")
 from crypto_data.binance.schema import CLOSE_PRICE
 
 from indicator import Indicator
-from util.numpy_util import cross_signal
-
-
-class MAType(Enum):
-    EMA = "EMA"
-    WMA = "WMA"
-    SMA = "SMA"
+from model.ma_type import MAType
+from util.numpy_util import cross_signal, Fit
+from util.trade import talib_ma
 
 
 class MACrossIndicator(Indicator):
@@ -88,25 +79,25 @@ class MACrossIndicator(Indicator):
         self.slow_ma_type = slow_ma_type
         self.slow_ma_column = slow_ma_column
 
-    def result(self, candle_df: pd.DataFrame):
-        def talib_ma(ma_type: str, ma_column: str, ma_period: int) -> np.ndarray:
-            return getattr(talib, ma_type)(candle_df[ma_column], timeperiod=ma_period)
-
+    def result(self, candles: np.ndarray):
+        candles_T = candles.T
         fast_ma_data = talib_ma(
-            self.fast_ma_type, self.fast_ma_column, self.fast_ma_period
+            type=self.fast_ma_type,
+            period=self.fast_ma_period,
+            data=candles_T[self.fast_ma_column],
         )
         slow_ma_data = talib_ma(
-            self.slow_ma_type, self.slow_ma_column, self.slow_ma_period
+            type=self.slow_ma_type,
+            period=self.slow_ma_period,
+            data=candles_T[self.fast_ma_column],
         )
 
-        buy_signal_line = cross_signal(fast_ma_data, ">", slow_ma_data)
-        sell_signal_line = cross_signal(fast_ma_data, "<", slow_ma_data)
+        buy_signal = cross_signal(fast_ma_data, ">", slow_ma_data, Fit.FIRST)
+        sell_signal = cross_signal(fast_ma_data, "<", slow_ma_data, Fit.FIRST)
 
-        return pd.DataFrame(
-            {
-                "fast": fast_ma_data,
-                "slow": slow_ma_data,
-                "buy_signal": buy_signal_line,
-                "sell_signal": sell_signal_line,
-            }
-        )
+        return pd.DataFrame({
+            "fast": fast_ma_data,
+            "slow": slow_ma_data,
+            "buy_signal": buy_signal,
+            "sell_signal": sell_signal,
+        })

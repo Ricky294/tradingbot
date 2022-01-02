@@ -9,7 +9,7 @@ from abstract import FuturesTrader
 from util.trade import calculate_quantity
 
 
-class RSIStrategy(Strategy):
+class SimpleStrategy(Strategy):
     def __init__(
             self,
             symbol: str,
@@ -33,7 +33,7 @@ class RSIStrategy(Strategy):
         else:
             signal = NONE
 
-        if signal != NONE:
+        if signal != NONE and self.trader.get_position(self.symbol) is None:
             self.trader.cancel_orders(self.symbol)
 
             latest_close = candles[-1][CLOSE_PRICE_INDEX]

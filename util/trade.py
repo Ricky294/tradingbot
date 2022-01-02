@@ -1,10 +1,17 @@
 from typing import Union
 
+import numpy as np
+import talib
+
 from consts import actions
 from consts.actions import BUY, SELL
 from model import Position
 from model.balance import Balance
 from model.order import OrderSide, OrderError, Order
+
+
+def talib_ma(type: str, period: int, data: np.ndarray) -> np.ndarray:
+    return getattr(talib, type)(data, timeperiod=period)
 
 
 def side_based_on_quantity(quantity: Union[float, int]):

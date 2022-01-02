@@ -11,25 +11,29 @@ from backtest import (
     positions_to_array,
 )
 from backtest.transform_positions import add_or_reduce_positions_to_array, SIDE_INDEX
+from binance_ import BinanceFuturesTrader
+from binance_.helpers import get_symbol_info
 from consts.candle_column_index import *
+from indicator.ma_trend import MATrendIndicator
+from indicator.mixed.rsi_with_ma_trend import RSIWithMATrendIndicator
 from model import Balance
 
 from indicator import RSIIndicator, MACDIndicator
 from plot.plotly import plot_results, ExtraGraph
 
-from strategy import RSIStrategy
+from strategy import SimpleStrategy
 from strategy.macd import MACDStrategy
 from util.common import read_config
-import plotly.graph_objects as go
 
 
 def backtest_trading():
     symbol = "BTCUSDT"
-    interval = "12h"
+    interval = "15m"
     market = "FUTURES"
     skip = 256
-    trade_ratio = 0.1
+    trade_ratio = 0.8
     start_cash = 1000
+    leverage = 1
 
     candle_db = CandleDB("data/binance_candles.db")
     candles = get_candles(
@@ -40,19 +44,26 @@ def backtest_trading():
         columns=[OPEN_TIME, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME],
     ).to_numpy()
 
-    binance_keys = read_config("secrets/binance_secrets.json")
-    client = Client(api_key=binance_keys["api_key"], api_secret=binance_keys["api_secret"])
+    symbol_info = get_symbol_info(Client(), symbol)
 
     trader = BacktestFuturesTrader(
-        client=client,
         interval=interval,
         trade_ratio=trade_ratio,
+        symbol_info=symbol_info,
         balance=Balance(asset="USDT", total=start_cash, available=start_cash),
+        leverage=leverage,
     )
-    indicator = RSIIndicator()
-    backtest_indicator = BacktestIndicator(candles=candles, indicator=indicator, skip=skip)
 
-    strategy = RSIStrategy(
+    upper_limit = 70
+    lower_limit = 30
+    rsi_ind = RSIIndicator(upper_limit=upper_limit, lower_limit=lower_limit)
+    ma_trend_ind = MATrendIndicator(slow_period=30, fast_period=10, slow_type="SMA", fast_type="SMA")
+
+    rsi_with_trend_ind = RSIWithMATrendIndicator(rsi=rsi_ind, ma_trend=ma_trend_ind)
+
+    backtest_indicator = BacktestIndicator(candles=candles, indicator=rsi_with_trend_ind, skip=skip)
+
+    strategy = SimpleStrategy(
         symbol=symbol,
         trader=trader,
         indicator=backtest_indicator,
@@ -61,13 +72,14 @@ def backtest_trading():
     run_backtest(
         candles=candles,
         strategy=strategy,
+        skip=skip,
     )
 
     upper_rsi_series = np.empty(candles.shape[0])
-    upper_rsi_series.fill(70)
+    upper_rsi_series.fill(upper_limit)
 
     lower_rsi_series = np.empty(candles.shape[0])
-    lower_rsi_series.fill(30)
+    lower_rsi_series.fill(lower_limit)
 
     plot_results(
         candles=candles.T,
@@ -77,7 +89,21 @@ def backtest_trading():
         candlestick_plot=False,
         extra_graphs=[
             ExtraGraph(
-                row_index=3,
+                chart_number=2,
+                graph_type="scatter",
+                graph_params=[
+                    dict(
+                        y=backtest_indicator.indicator_data["slow_ma"],
+                        name="Slow MA",
+                    ),
+                    dict(
+                        y=backtest_indicator.indicator_data["fast_ma"],
+                        name="Fast MA",
+                    ),
+                ],
+            ),
+            ExtraGraph(
+                chart_number=3,
                 graph_type="scatter",
                 graph_params=[
                     dict(

@@ -3,9 +3,8 @@ from typing import Callable, Optional, List, Union
 
 import numpy as np
 
-from binance.client import Client
-
 from abstract import FuturesTrader
+from backtest.exceptions import LiquidationError
 from backtest.position import BacktestPosition
 from consts.actions import SELL, BUY
 from consts.candle_column_index import *
@@ -18,21 +17,19 @@ from util.common import interval_to_seconds
 class BacktestFuturesTrader(FuturesTrader, Callable):
     def __init__(
         self,
-        client: Client,
         interval: str,
         trade_ratio: float,
+        symbol_info: SymbolInfo,
         balance: Balance = Balance("USDT", total=1_000, available=1_000),
         fee_ratio=0.001,
         leverage=1,
     ):
         super().__init__(trade_ratio)
         self.fee_ratio = fee_ratio
-        self.client = client
+        self.symbol_info = symbol_info
         self._interval = interval_to_seconds(interval)
 
         self._leverage = leverage
-
-        self.symbol_info = self._get_all_symbol_info()
 
         self.initial_balance = copy.deepcopy(balance)
         self.balance = balance
@@ -104,7 +101,7 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
             self.positions.append(self.position)
             self.position = None
         else:
-            self.balance.available += price * quantity
+            self.balance.available += price * quantity * self._leverage
 
     def get_limit_order(self):
         return self.limit_order
@@ -154,6 +151,15 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
                 just_entered = True
 
         if self.position is not None and not just_entered:
+
+            if self.position.side == BUY:
+                current_price = self.latest_low_price
+            else:
+                current_price = self.latest_high_price
+
+            if self.position.is_liquidated(self.balance, current_price):
+                raise LiquidationError("You got liquidated! Reduce your leverage to avoid this.")
+
             take_profit_hit = self._is_take_profit_hit()
             stop_hit = self._is_stop_loss_hit()
 
@@ -241,17 +247,8 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
             open_orders.append(self.stop_order)
         return open_orders
 
-    def _get_all_symbol_info(self):
-        exchange_info: dict = self.client.futures_exchange_info()
-        return {
-            symbol_info["symbol"]: SymbolInfo(**symbol_info)
-            for symbol_info in exchange_info["symbols"]
-        }
-
     def get_symbol_info(self, symbol: str) -> Optional[SymbolInfo]:
-        symbol = symbol.upper()
-
-        return self.symbol_info[symbol]
+        return self.symbol_info
 
     def get_position(self, symbol: str) -> Optional[BacktestPosition]:
         return self.position

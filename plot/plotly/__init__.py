@@ -40,8 +40,8 @@ from util.numpy_util import map_match
 
 class ExtraGraph:
 
-    def __init__(self, row_index: int, graph_type: str, graph_params: List[dict]):
-        self.row_index = row_index
+    def __init__(self, chart_number: int, graph_type: str, graph_params: List[dict]):
+        self.chart_number = chart_number
         self.graph_params = graph_params
         self.graph_type = graph_type
 
@@ -104,7 +104,7 @@ def plot_results(
         extra_graph_max_row = 0
 
         if extra_graphs is not None:
-            extra_graph_max_row = max((graph.row_index for graph in extra_graphs))
+            extra_graph_max_row = max((graph.chart_number for graph in extra_graphs))
 
         if extra_graph_max_row > 2:
             max_row = extra_graph_max_row
@@ -118,7 +118,7 @@ def plot_results(
         ]
 
         if extra_graphs is not None:
-            specs.extend([[{"type": graph.graph_type.lower()}] for graph in extra_graphs])
+            specs.extend([[{"type": graph.graph_type.lower()}] for graph in extra_graphs if graph.chart_number > 2])
 
         fig = make_subplots(
             rows=max_row, cols=1,
@@ -251,7 +251,7 @@ def plot_results(
                             x=open_time,
                             **params,
                         ),
-                        row=graph.row_index, col=1,
+                        row=graph.chart_number, col=1,
                     )
 
         fig.update_layout(
@@ -263,7 +263,13 @@ def plot_results(
         return fig
 
     def include_info_on_figure():
-        wins, losses, win_rate = win_loss_rate(profit)
+        try:
+            wins, losses, win_rate = win_loss_rate(profit)
+        except ZeroDivisionError:
+            wins = 0
+            losses = 0
+            win_rate = 0
+
         biggest_loss = biggest_looser(profit)
         biggest_win = biggest_winner(profit)
 

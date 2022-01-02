@@ -1,4 +1,5 @@
 from consts.actions import LONG, SHORT
+from model import Balance
 
 
 class BacktestPosition:
@@ -59,3 +60,11 @@ class BacktestPosition:
 
     def is_closed(self):
         return sum(self.quantities) == 0
+
+    def is_liquidated(self, balance: Balance, current_price: float):
+        """
+        current_price: Current low or high price.
+        """
+        profit = self.calculate_profit(current_price)
+
+        return profit < 0 and abs(profit) >= balance.total
