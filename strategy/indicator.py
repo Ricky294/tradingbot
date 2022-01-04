@@ -1,7 +1,7 @@
 import numpy as np
 
-from consts.actions import BUY, SELL, NONE
-from consts.candle_column_index import CLOSE_PRICE_INDEX
+from consts.trade_actions import BUY, SELL, NONE
+from consts.candle_index import CLOSE_PRICE_INDEX
 from indicator import Indicator
 from model import Order
 from strategy import Strategy
@@ -9,28 +9,33 @@ from abstract import FuturesTrader
 from util.trade import calculate_quantity
 
 
-class MACDStrategy(Strategy):
+class IndicatorStrategy(Strategy):
     def __init__(
-        self, symbol: str, trader: FuturesTrader, macd_indicator: Indicator
+            self,
+            symbol: str,
+            trader: FuturesTrader,
+            indicator: Indicator,
+            # stop_indicator: Indicator,
     ):
         super().__init__(symbol=symbol, trader=trader)
-        self.macd_indicator = macd_indicator
+        self.indicator = indicator
+        # self.stop_indicator = stop_indicator
 
     def __call__(
-        self,
-        candles: np.ndarray,
+            self,
+            candles: np.ndarray,
     ):
-        result = self.macd_indicator.result(candles)
-        latest_macd = result.tail(1)
+        result = self.indicator(candles)
+        latest = result[-1]
 
-        if latest_macd["buy_signal"].item():
+        if latest[BUY]:
             signal = BUY
-        elif latest_macd["sell_signal"].item():
+        elif latest[SELL]:
             signal = SELL
         else:
             signal = NONE
 
-        if signal != NONE:
+        if signal != NONE and self.trader.get_position(self.symbol) is None:
             self.trader.cancel_orders(self.symbol)
 
             latest_close = candles[-1][CLOSE_PRICE_INDEX]
@@ -43,10 +48,10 @@ class MACDStrategy(Strategy):
             )
 
             stop_loss_price = (
-                latest_close - 1000 if signal == BUY else latest_close + 1000
+                latest_close - 400 if signal == BUY else latest_close + 400
             )
             take_profit_price = (
-                latest_close - 1000 if signal == SELL else latest_close + 1000
+                latest_close - 400 if signal == SELL else latest_close + 400
             )
 
             self.trader.create_position(

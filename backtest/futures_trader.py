@@ -6,9 +6,9 @@ import numpy as np
 from abstract import FuturesTrader
 from backtest.exceptions import LiquidationError
 from backtest.position import BacktestPosition
-from consts.actions import SELL, BUY
-from consts.candle_column_index import *
-from consts.order import LIMIT_ORDER, MARKET_ORDER
+from consts.trade_actions import SELL, BUY
+from consts.candle_index import *
+from consts.order_type import LIMIT_ORDER, MARKET_ORDER
 from model import Balance, SymbolInfo
 from model.order import LimitOrder, MarketOrder, TakeProfitMarketOrder, StopLossMarketOrder
 from util.common import interval_to_seconds
@@ -27,7 +27,7 @@ class BacktestFuturesTrader(FuturesTrader, Callable):
         super().__init__(trade_ratio)
         self.fee_ratio = fee_ratio
         self.symbol_info = symbol_info
-        self._interval = interval_to_seconds(interval)
+        self.interval_in_seconds = interval_to_seconds(interval)
 
         self._leverage = leverage
 

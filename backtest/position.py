@@ -1,4 +1,4 @@
-from consts.actions import LONG, SHORT
+from consts.trade_actions import LONG, SHORT
 from model import Balance
 
 

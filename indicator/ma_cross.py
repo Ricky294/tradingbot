@@ -79,7 +79,7 @@ class MACrossIndicator(Indicator):
         self.slow_ma_type = slow_ma_type
         self.slow_ma_column = slow_ma_column
 
-    def result(self, candles: np.ndarray):
+    def __call__(self, candles: np.ndarray):
         candles_T = candles.T
         fast_ma_data = talib_ma(
             type=self.fast_ma_type,

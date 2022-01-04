@@ -1,14 +1,14 @@
 from abc import ABC, abstractmethod
+from typing import Callable
 
 import numpy as np
-import pandas as pd
 
 
-class Indicator(ABC):
+class Indicator(ABC, Callable):
     @abstractmethod
     def __init__(self, *args, **data):
         pass
 
     @abstractmethod
-    def result(self, candles: np.ndarray) -> pd.DataFrame:
+    def __call__(self, candles: np.ndarray) -> np.ndarray:
         pass

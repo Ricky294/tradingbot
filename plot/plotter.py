@@ -4,10 +4,6 @@ from typing import List
 import numpy as np
 import pandas as pd
 
-import dash
-from dash import dcc
-from dash import html
-
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 
@@ -21,7 +17,7 @@ from backtest import (
     PROFIT_INDEX,
     EXIT_QUANTITY_INDEX,
 )
-from consts.candle_column_index import (
+from consts.candle_index import (
     OPEN_TIME_INDEX,
     OPEN_PRICE_INDEX,
     HIGH_PRICE_INDEX,
@@ -29,6 +25,7 @@ from consts.candle_column_index import (
     CLOSE_PRICE_INDEX,
     VOLUME_INDEX,
 )
+from plot import Plot
 from plot.transform import assign_where_not_zero
 from statistics.basic import (
     win_loss_rate,
@@ -38,26 +35,17 @@ from statistics.basic import (
 from util.numpy_util import map_match
 
 
-class ExtraGraph:
-
-    def __init__(self, chart_number: int, graph_type: str, graph_params: List[dict]):
-        self.chart_number = chart_number
-        self.graph_params = graph_params
-        self.graph_type = graph_type
-
-
-def __create_custom_data(*arrays: np.ndarray):
-    return np.stack(tuple(arrays), axis=-1)
-
-
 def plot_results(
         candles: np.ndarray,
         positions: np.ndarray,
         add_or_reduce_positions: np.ndarray,
         start_cash: float,
-        extra_graphs: List[ExtraGraph] = None,
+        extra_plots: List[Plot] = None,
         candlestick_plot=False,
 ):
+    def __create_custom_data(*arrays: np.ndarray):
+        return np.stack(tuple(arrays), axis=-1)
+
     candle_open_times = candles[OPEN_TIME_INDEX]
 
     entry_time = map_match(candle_open_times, positions[TIME_INDEX])
@@ -103,8 +91,8 @@ def plot_results(
 
         extra_graph_max_row = 0
 
-        if extra_graphs is not None:
-            extra_graph_max_row = max((graph.chart_number for graph in extra_graphs))
+        if extra_plots is not None:
+            extra_graph_max_row = max((graph.number for graph in extra_plots))
 
         if extra_graph_max_row > 2:
             max_row = extra_graph_max_row
@@ -117,8 +105,8 @@ def plot_results(
             [{"secondary_y": True}],
         ]
 
-        if extra_graphs is not None:
-            specs.extend([[{"type": graph.graph_type.lower()}] for graph in extra_graphs if graph.chart_number > 2])
+        if extra_plots is not None:
+            specs.extend([[{"type": graph.type.lower()}] for graph in extra_plots if graph.number > 2])
 
         fig = make_subplots(
             rows=max_row, cols=1,
@@ -240,18 +228,24 @@ def plot_results(
             row=2, col=1,
         )
 
-        if extra_graphs is not None:
-            for graph in extra_graphs:
+        if extra_plots is not None:
+            for graph in extra_plots:
                 graph_module = importlib.import_module(f'plotly.graph_objects')
-                graph_class = getattr(graph_module, graph.graph_type.capitalize())
+                graph_class = getattr(graph_module, graph.type.capitalize())
+                graph_data = graph.data_callback(candles.T)
+                for params in graph.params:
+                    if "constant_y" in params:
+                        y_data = [params.pop("constant_y")] * open_time.size
+                    else:
+                        y_data = graph_data[params.pop("y")]
 
-                for params in graph.graph_params:
                     fig.add_trace(
                         graph_class(
                             x=open_time,
+                            y=y_data,
                             **params,
                         ),
-                        row=graph.chart_number, col=1,
+                        row=graph.number, col=1,
                     )
 
         fig.update_layout(
@@ -305,19 +299,3 @@ def plot_results(
     fig = create_plots()
     include_info_on_figure()
     fig.show()
-
-
-def create_dash_app(fig):
-    app = dash.Dash(__name__)
-    app.layout = html.Div([
-        dcc.Checklist(
-            options=[
-                {'label': 'Logarithmic', 'value': 'log'},
-            ],
-            value=['log'],
-            labelStyle={'display': 'inline-block'}
-        ),
-        dcc.Graph(id="trade_result", figure=fig)
-    ])
-
-    app.run_server(debug=True)

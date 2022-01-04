@@ -7,7 +7,7 @@ from abstract import FuturesTrader
 
 
 class Strategy(Callable):
-    def __init__(self, symbol: str, trader: FuturesTrader):
+    def __init__(self, symbol: str, trader: FuturesTrader, *args, **kwargs):
         self.symbol = symbol.upper()
         self.trader = trader
 

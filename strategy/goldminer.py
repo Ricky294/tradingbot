@@ -3,8 +3,8 @@ import torch as pt
 from typing import Dict
 
 from abstract import FuturesTrader
-from consts.actions import LONG, SHORT, NONE
-from consts.candle_column_index import CLOSE_PRICE_INDEX
+from consts.trade_actions import LONG, SHORT, NONE
+from consts.candle_index import CLOSE_PRICE_INDEX
 from checkpointing.load import load_model
 from model import SymbolTradeInfo, Balance, Order
 from nn.models import GoldMiner

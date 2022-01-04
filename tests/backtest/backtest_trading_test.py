@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 from backtest import BacktestFuturesTrader, run_backtest, positions_to_array
 from backtest.transform_positions import add_or_reduce_positions_to_array
-from consts.actions import SELL, BUY
-from consts.candle_column_index import OPEN_PRICE_INDEX, CLOSE_PRICE_INDEX
+from consts.trade_actions import SELL, BUY
+from consts.candle_index import OPEN_PRICE_INDEX, CLOSE_PRICE_INDEX
 from indicator import Indicator
 from model import Balance, Order
 from plot.plotly import plot_results
@@ -16,7 +16,7 @@ class BacktestTestIndicator(Indicator):
     def __init__(self, *args, **data):
         pass
 
-    def result(self, candle_df: np.ndarray) -> pd.DataFrame:
+    def __call__(self, candle_df: np.ndarray) -> pd.DataFrame:
         return pd.DataFrame(
             {"buy_signal": []},
             {"sell_signal": []},

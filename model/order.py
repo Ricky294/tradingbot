@@ -1,9 +1,8 @@
 from enum import Enum
 from typing import Union, Dict
 
-from consts import actions
-from consts.actions import BUY, SELL
-from consts.order import (
+import consts.trade_actions
+from consts.order_type import (
     MARKET_ORDER, LIMIT_ORDER,
     TAKE_PROFIT_MARKET_ORDER, STOP_LOSS_MARKET_ORDER,
     TAKE_PROFIT_LIMIT_ORDER, STOP_LOSS_LIMIT_ORDER,
@@ -23,8 +22,8 @@ def generate_client_order_id() -> str:
 
 
 class OrderSide(Enum):
-    BUY = actions.BUY
-    SELL = actions.SELL
+    BUY = consts.trade_actions.BUY
+    SELL = consts.trade_actions.SELL
 
     def __str__(self):
         return self.value
@@ -85,8 +84,8 @@ class OrderError(Exception):
 
 
 class Side(Enum):
-    SELL = actions.SELL
-    BUY = actions.BUY
+    SELL = consts.trade_actions.SELL
+    BUY = consts.trade_actions.BUY
 
     @staticmethod
     def from_quantity(quantity):
@@ -150,9 +149,9 @@ class Order:
     def side(self):
         if hasattr(self, "quantity"):
             if self.quantity > 0:
-                return BUY
+                return consts.trade_actions.BUY
             else:
-                return SELL
+                return consts.trade_actions.SELL
         if hasattr(self, "close_side"):
             return str(self.close_side)
 

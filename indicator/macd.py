@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 
-from consts.candle_column_index import CLOSE_PRICE_INDEX
+from consts.candle_index import CLOSE_PRICE_INDEX
 from util.numpy_util import cross_signal
 import talib
 
@@ -22,7 +22,7 @@ class MACDIndicator(Indicator):
         self.slow_period = slow_period      # signal line
         self.signal_period = signal_period
 
-    def result(self, candles: np.ndarray):
+    def __call__(self, candles: np.ndarray):
         macd, signal, histogram = talib.MACD(
             candles.T[self.column],
             fastperiod=self.fast_period,

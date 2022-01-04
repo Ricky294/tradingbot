@@ -1,4 +1,11 @@
-from crypto_data.binance.schema import *
+from crypto_data.binance.schema import (
+    OPEN_TIME,
+    OPEN_PRICE,
+    HIGH_PRICE,
+    LOW_PRICE,
+    CLOSE_PRICE,
+    VOLUME,
+)
 
 OPEN_TIME_INDEX = 0
 OPEN_PRICE_INDEX = 1

@@ -1,8 +1,6 @@
 import pandas as pd
-try:
-    import talib
-except ImportError:
-    print("Could not find talib package.")
+import talib
+
 from crypto_data.binance.schema import HIGH_PRICE, LOW_PRICE, CLOSE_PRICE
 
 from indicator import Indicator
@@ -14,7 +12,7 @@ class ATRIndicator(Indicator):
         self.slow_period = slow_period
         self.fast_period = fast_period
 
-    def result(self, candle_df: pd.DataFrame) -> pd.DataFrame:
+    def __call__(self, candle_df: pd.DataFrame) -> pd.DataFrame:
         atr = talib.ATR(
             candle_df[HIGH_PRICE],
             candle_df[LOW_PRICE],

@@ -14,7 +14,7 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 from tqdm import tqdm
 
-from consts.candle_column_index import CLOSE_PRICE_INDEX
+from consts.candle_index import CLOSE_PRICE_INDEX
 from checkpointing.load import load_model
 from checkpointing.save import save_model
 from nn.models import Miner

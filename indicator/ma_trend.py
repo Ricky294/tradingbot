@@ -1,7 +1,6 @@
 from typing import Union
 
 import numpy as np
-import pandas as pd
 
 from indicator import Indicator
 from model.ma_type import MAType
@@ -9,6 +8,9 @@ from util.trade import talib_ma
 
 
 class MATrendIndicator(Indicator):
+
+    SLOW_MA_INDEX = 2
+    FAST_MA_INDEX = 3
 
     def __init__(
             self,
@@ -27,7 +29,7 @@ class MATrendIndicator(Indicator):
         self.fast_type = str(fast_type)
         self.fast_column_index = fast_column_index
 
-    def result(self, candles: np.ndarray) -> pd.DataFrame:
+    def __call__(self, candles: np.ndarray):
         candles_T = candles.T
 
         slow_ma = talib_ma(
@@ -44,9 +46,9 @@ class MATrendIndicator(Indicator):
         buy_signal = fast_ma > slow_ma
         sell_signal = fast_ma < slow_ma
 
-        return pd.DataFrame({
-            "slow_ma": slow_ma,
-            "fast_ma": fast_ma,
-            "buy_signal": buy_signal,
-            "sell_signal": sell_signal,
-        })
+        return np.concatenate((
+            [buy_signal],
+            [sell_signal],
+            [slow_ma],
+            [fast_ma],
+        ))

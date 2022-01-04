@@ -3,8 +3,8 @@ from typing import Dict
 import numpy as np
 
 from abstract import FuturesTrader
-from consts.actions import SELL, BUY
-from consts.candle_column_index import CLOSE_PRICE_INDEX
+from consts.trade_actions import SELL, BUY
+from consts.candle_index import CLOSE_PRICE_INDEX
 from checkpointing.load import load_model
 from model import SymbolTradeInfo, Balance, Order
 from nn.models.miner import Miner

@@ -1,27 +1,34 @@
 import numpy as np
-import pandas as pd
 
+from consts.trade_actions import BUY, SELL
 from indicator import Indicator, RSIIndicator
 from indicator.ma_trend import MATrendIndicator
 
 
 class RSIWithMATrendIndicator(Indicator):
 
+    RSI_INDEX = 2
+    SLOW_MA_INDEX = 3
+    FAST_MA_INDEX = 4
+
     def __init__(self, rsi: RSIIndicator, ma_trend: MATrendIndicator):
         self.rsi = rsi
         self.ma_trend = ma_trend
 
-    def result(self, candles: np.ndarray) -> pd.DataFrame:
-        rsi_result = self.rsi.result(candles)
-        ma_trend_result = self.ma_trend.result(candles)
+    def __call__(self, candles: np.ndarray):
+        rsi_result = self.rsi(candles)
+        ma_trend_result = self.ma_trend(candles)
 
-        buy_signal = ma_trend_result["buy_signal"] & rsi_result["buy_signal"]
-        sell_signal = ma_trend_result["sell_signal"] & rsi_result["sell_signal"]
+        ma_buy_mask = ma_trend_result[BUY] == 1
+        ma_sell_mask = ma_trend_result[SELL] == 1
 
-        return pd.DataFrame({
-            "rsi": rsi_result["rsi"],
-            "slow_ma": ma_trend_result["slow_ma"],
-            "fast_ma": ma_trend_result["fast_ma"],
-            "buy_signal": buy_signal,
-            "sell_signal": sell_signal,
-        })
+        rsi_buy_mask = rsi_result[BUY] == 1
+        rsi_sell_mask = rsi_result[SELL] == 1
+
+        return np.concatenate((
+            [ma_buy_mask & rsi_buy_mask],
+            [ma_sell_mask & rsi_sell_mask],
+            [rsi_result[RSIIndicator.RSI_INDEX]],
+            [ma_trend_result[MATrendIndicator.SLOW_MA_INDEX]],
+            [ma_trend_result[MATrendIndicator.FAST_MA_INDEX]],
+        ))

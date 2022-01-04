@@ -3,8 +3,7 @@ from typing import Union
 import numpy as np
 import talib
 
-from consts import actions
-from consts.actions import BUY, SELL
+from consts.trade_actions import BUY, SELL
 from model import Position
 from model.balance import Balance
 from model.order import OrderSide, OrderError, Order
@@ -15,7 +14,7 @@ def talib_ma(type: str, period: int, data: np.ndarray) -> np.ndarray:
 
 
 def side_based_on_quantity(quantity: Union[float, int]):
-    return actions.BUY if quantity > 0 else actions.SELL
+    return BUY if quantity > 0 else SELL
 
 
 def calculate_quantity(
