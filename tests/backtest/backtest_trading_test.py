@@ -6,7 +6,8 @@ from consts.trade_actions import SELL, BUY
 from consts.candle_index import OPEN_PRICE_INDEX, CLOSE_PRICE_INDEX
 from indicator import Indicator
 from model import Balance, Order
-from plot.plotly import plot_results
+
+from plot.plotter import plot_results, CandlestickType
 from strategy import Strategy
 from util.trade import calculate_quantity
 
@@ -114,6 +115,6 @@ def test_backtest_trading():
         positions=positions_to_array(trader.positions),
         add_or_reduce_positions=add_or_reduce_positions_to_array(trader.positions),
         start_cash=start_cash,
-        candlestick_plot=True,
+        candlestick_type=CandlestickType.JAPANESE,
     )
 

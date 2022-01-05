@@ -16,7 +16,7 @@ from model import Balance
 
 from indicator import Indicator
 from plot import Plot
-from plot.plotter import plot_results
+from plot.plotter import plot_results, CandlestickType
 
 from strategy import IndicatorStrategy, Strategy
 
@@ -34,6 +34,7 @@ def run_backtest(
         leverage: float,
         strategy_type: Type[Union[Strategy, IndicatorStrategy]],
         indicator: Optional[Indicator] = None,
+        candlestick_type=CandlestickType.LINE,
         extra_plots: Optional[List[Plot]] = None,
 ):
 
@@ -46,6 +47,8 @@ def run_backtest(
         columns=[OPEN_TIME, OPEN_PRICE, HIGH_PRICE, LOW_PRICE, CLOSE_PRICE, VOLUME],
     ).to_numpy()
 
+    candles = candles[skip:]
+
     symbol_info = get_symbol_info(Client(), symbol)
 
     trader = BacktestFuturesTrader(
@@ -57,7 +60,7 @@ def run_backtest(
     )
 
     if indicator is not None:
-        backtest_indicator = BacktestIndicator(candles=candles, indicator=indicator, skip=skip)
+        backtest_indicator = BacktestIndicator(candles=candles, indicator=indicator)
 
         strategy = strategy_type(
             symbol=symbol,
@@ -73,7 +76,6 @@ def run_backtest(
     backtest.run_backtest(
         candles,
         strategy,
-        skip,
     )
 
     plot_results(
@@ -81,7 +83,7 @@ def run_backtest(
         positions=positions_to_array(trader.positions),
         add_or_reduce_positions=add_or_reduce_positions_to_array(trader.positions),
         start_cash=start_cash,
-        candlestick_plot=False,
+        candlestick_type=candlestick_type,
         extra_plots=extra_plots,
     )
 

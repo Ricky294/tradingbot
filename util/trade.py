@@ -7,6 +7,27 @@ from consts.trade_actions import BUY, SELL
 from model import Position
 from model.balance import Balance
 from model.order import OrderSide, OrderError, Order
+import numba
+
+
+@numba.jit(nopython=True)
+def calculate_ha_open(open, close, ha_close):
+    ha_open = np.empty(np.shape(open))
+    ha_open[0] = (open[0] + close[0]) / 2
+
+    for i in range(1, np.shape(open)[0]):
+        ha_open[i] = (ha_open[i-1] + ha_close[i-1]) / 2
+
+    return ha_open
+
+
+def to_heikin_ashi(open: np.ndarray, high: np.ndarray, low: np.ndarray, close: np.ndarray):
+    ha_close = (open + high + low + close) / 4
+    ha_open = calculate_ha_open(open, close, ha_close)
+    ha_high = np.maximum.reduce((high, ha_open, ha_close))
+    ha_low = np.minimum.reduce((low, ha_open, ha_close))
+
+    return ha_open, ha_high, ha_low, ha_close
 
 
 def talib_ma(type: str, period: int, data: np.ndarray) -> np.ndarray:

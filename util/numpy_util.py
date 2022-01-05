@@ -47,7 +47,8 @@ def map_match(src, tar):
     src_mat = src[:, np.newaxis]
     tar_mat = np.reshape(np.tile(tar, src_size), newshape=(src_size, tar_size))
     mask = np.sum(np.equal(src_mat, tar_mat), axis=-1)
-    return src * mask
+    ret = src * mask
+    return ret
 
 
 def mask_match(src, tar):

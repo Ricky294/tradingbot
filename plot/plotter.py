@@ -1,4 +1,5 @@
 import importlib
+from enum import Enum
 from typing import List
 
 import numpy as np
@@ -33,6 +34,16 @@ from statistics.basic import (
     biggest_winner,
 )
 from util.numpy_util import map_match
+from util.trade import to_heikin_ashi
+
+
+class CandlestickType(Enum):
+    LINE = 0
+    JAPANESE = 1
+    HEIKIN_ASHI = 2
+
+    def __str__(self):
+        return self.value
 
 
 def plot_results(
@@ -41,8 +52,10 @@ def plot_results(
         add_or_reduce_positions: np.ndarray,
         start_cash: float,
         extra_plots: List[Plot] = None,
-        candlestick_plot=False,
+        candlestick_type: CandlestickType = CandlestickType.LINE,
 ):
+    print("Vectorizing positions and plotting results.")
+
     def __create_custom_data(*arrays: np.ndarray):
         return np.stack(tuple(arrays), axis=-1)
 
@@ -68,6 +81,8 @@ def plot_results(
     middle_time[middle_time == 0.0] = np.nan
     exit_time[exit_time == 0.0] = np.nan
 
+    is_candlestick = candlestick_type == CandlestickType.HEIKIN_ASHI or candlestick_type == CandlestickType.JAPANESE
+
     def create_plots():
         nonlocal entry_time
         nonlocal middle_time
@@ -79,7 +94,7 @@ def plot_results(
         close_price = candles[CLOSE_PRICE_INDEX]
         volume = candles[VOLUME_INDEX]
 
-        if candlestick_plot and (high_price is None or low_price is None):
+        if is_candlestick and (high_price is None or low_price is None):
             raise ValueError("high_price and low_price parameter is required if candlestick_plot is True")
 
         open_time = pd.to_datetime(open_time, unit="s")
@@ -127,8 +142,16 @@ def plot_results(
             row=1, col=1,
         )
 
-        if candlestick_plot:
-            open_price = candles[OPEN_PRICE_INDEX]
+        open_price = candles[OPEN_PRICE_INDEX]
+        if candlestick_type == CandlestickType.HEIKIN_ASHI:
+            open_price, high_price, low_price, close_price = to_heikin_ashi(
+                open=open_price,
+                high=high_price,
+                low=low_price,
+                close=close_price,
+            )
+
+        if is_candlestick:
             fig.add_trace(
                 go.Candlestick(
                     x=open_time,
@@ -153,7 +176,7 @@ def plot_results(
                 secondary_y=False,
             )
 
-        low_or_close_price = low_price if candlestick_plot else close_price
+        low_or_close_price = low_price if is_candlestick else close_price
         fig.add_trace(
             go.Scatter(
                 x=entry_time,
@@ -191,7 +214,7 @@ def plot_results(
             row=2, col=1,
         )
 
-        high_or_close_price = high_price if candlestick_plot else close_price
+        high_or_close_price = high_price if is_candlestick else close_price
         fig.add_trace(
             go.Scatter(
                 x=exit_time,

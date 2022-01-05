@@ -4,11 +4,10 @@ from indicator import Indicator
 
 
 class BacktestIndicator(Indicator):
-    def __init__(self, candles: np.ndarray, indicator: Indicator, skip=0):
+    def __init__(self, candles: np.ndarray, indicator: Indicator):
         self.indicator = indicator
         self.__result = indicator(candles).T
-        self.__skip = skip
-        self.__index = skip
+        self.__index = 0
 
     def __call__(self, *args, **data):
         self.__index = self.__index + 1
