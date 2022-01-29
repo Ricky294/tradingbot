@@ -8,7 +8,7 @@ from crypto_data.shared.candle_db import CandleDB
 from backtest import BacktestFuturesTrader, run_backtest
 from model import Balance
 
-from plot.plotter import plot_results
+from plot.plotter import plot_backtest_results
 from strategy.goldminer import GoldMinerStrategy
 
 
@@ -48,7 +48,7 @@ def backtest_trading():
         trader=trader,
     )
 
-    plot_results(
+    plot_backtest_results(
         candles=candles,
         trader=trader,
     )

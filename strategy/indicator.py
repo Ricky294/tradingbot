@@ -1,70 +1,91 @@
+from typing import List
+
 import numpy as np
 
-from consts.trade_actions import BUY, SELL, NONE
-from consts.candle_index import CLOSE_PRICE_INDEX
-from indicator import Indicator
-from model import Order
-from strategy import Strategy
-from abstract import FuturesTrader
-from util.trade import calculate_quantity
+from trader.core.interface import FuturesTrader
+from trader.core.const.candle_index import CLOSE_PRICE_INDEX
+from trader.core.const.trade_actions import NONE, BUY, SELL
+from trader.core.strategy import Strategy
+from trader.core.util.trade import calculate_quantity
+
+from indicator.signal import Indicator
+from indicator.sltp import SLTPIndicator
+from util import is_empty
 
 
 class IndicatorStrategy(Strategy):
+
     def __init__(
             self,
             symbol: str,
             trader: FuturesTrader,
-            indicator: Indicator,
-            # stop_indicator: Indicator,
+            indicators: List[Indicator],
+            trade_ratio: float,
+            leverage: int,
+            sltp_indicator: SLTPIndicator = None,
+            exit_indicators: List[Indicator] = None,
+            can_change_position=False,
+            asset="USDT",
     ):
-        super().__init__(symbol=symbol, trader=trader)
-        self.indicator = indicator
-        # self.stop_indicator = stop_indicator
+        if sltp_indicator is None and is_empty(exit_indicators):
+            raise ValueError(
+                "sltp_indicator and exit_indicator are both None. "
+                "Provide at least one of them to allow the system to close positions."
+            )
 
-    def __call__(
-            self,
-            candles: np.ndarray,
-    ):
-        result = self.indicator(candles)
-        latest = result[-1]
+        super().__init__(trader=trader)
+        self.symbol = symbol
+        self.trade_ratio = trade_ratio
+        self.asset = asset
+        self.leverage = leverage
+        self.indicators = indicators
+        self.exit_indicators = exit_indicators
+        self.sltp_indicator = sltp_indicator
+        self.can_change_position = can_change_position
 
-        if latest[BUY]:
-            signal = BUY
-        elif latest[SELL]:
-            signal = SELL
-        else:
-            signal = NONE
+    def __indicator_signal(self, candles: np.ndarray, indicators: List[Indicator]):
+        signals = tuple(indicator.signal(candles) for indicator in indicators)
+        if all(tuple(signal == BUY for signal in signals)):
+            return BUY
+        elif all(tuple(signal == SELL for signal in signals)):
+            return SELL
+        return NONE
 
-        if signal != NONE and self.trader.get_position(self.symbol) is None:
-            self.trader.cancel_orders(self.symbol)
+    def on_candle(self, candles: np.ndarray):
+        signal = self.__indicator_signal(candles, self.indicators)
 
+        position = self.trader.get_position(self.symbol)
+        entry_signal = signal != NONE and (position is None or self.can_change_position)
+
+        if entry_signal:
             latest_close = candles[-1][CLOSE_PRICE_INDEX]
+
             quantity = calculate_quantity(
                 side=signal,
-                balance=self.trader.get_balances()["USDT"],
-                leverage=self.trader.get_leverage(self.symbol),
                 price=latest_close,
-                percentage=self.trader.trade_ratio,
+                trade_ratio=self.trade_ratio,
+                leverage=self.leverage,
+                balance=self.trader.get_balance(self.asset).available
             )
 
-            stop_loss_price = (
-                latest_close - 400 if signal == BUY else latest_close + 400
-            )
-            take_profit_price = (
-                latest_close - 400 if signal == SELL else latest_close + 400
+            stop_loss_price, take_profit_price = None, None
+
+            if self.sltp_indicator is not None:
+                stop_loss_price, take_profit_price = self.sltp_indicator(
+                    candles,
+                    side=signal,
+                    leverage=self.trader.get_leverage(self.symbol)
+                )
+
+            orders = self.trader.create_position(
+                symbol=self.symbol,
+                quantity=quantity,
+                stop_loss_price=stop_loss_price,
+                take_profit_price=take_profit_price,
             )
 
-            self.trader.create_position(
-                Order.market(
-                    symbol=self.symbol,
-                    quantity=quantity,
-                ),
-                Order.take_profit_market(
-                    symbol=self.symbol,
-                    stop_price=take_profit_price,
-                ),
-                Order.stop_market(
-                    symbol=self.symbol,
-                    stop_price=stop_loss_price,
-                ),
-            )
+        elif position is not None and not is_empty(self.exit_indicators):
+            exit_signal = self.__indicator_signal(candles, self.exit_indicators)
+
+            if (exit_signal == BUY and position.side == SELL) or (exit_signal == SELL and position.side == BUY):
+                self.trader.close_position(self.symbol)

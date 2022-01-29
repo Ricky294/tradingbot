@@ -21,19 +21,13 @@ def biggest_looser(profit: np.ndarray):
     return np.min(profit)
 
 
-def return_on_investment(start_cash: float, capital: np.ndarray):
-    """
-    Returns: (total return, ratio)
-    """
-    last_capital = capital[-1]
-    return last_capital - start_cash, last_capital / start_cash
+def cash_ratio(start_cash: float, end_cash: float):
+    return end_cash / start_cash
 
 
-def win_loss_rate(profit: np.ndarray):
-    wins = len(profit[profit > 0])
-    losses = len(profit[profit < 0])
+def win_ratio(wins: int, losses: int):
 
-    return wins, losses, wins / (wins + losses)
+    return wins / (wins + losses)
 
 
 def maximum_drawdown():

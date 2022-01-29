@@ -1,15 +1,12 @@
 import numpy as np
 import torch as pt
-from typing import Dict
 
-from abstract import FuturesTrader
-from consts.trade_actions import LONG, SHORT, NONE
-from consts.candle_index import CLOSE_PRICE_INDEX
+from trader.core.interface import FuturesTrader
+from trader.core.const.trade_actions import LONG, SHORT, NONE
+from trader.core.const.candle_index import CLOSE_PRICE_INDEX
 from checkpointing.load import load_model
-from model import SymbolTradeInfo, Balance, Order
 from nn.models import GoldMiner
 from strategy import Strategy
-from util.trade import calculate_quantity
 from matils import softmax
 from matils.norm import normalize, normalize_around_price
 
@@ -19,8 +16,11 @@ class GoldMinerStrategy(Strategy):
             self,
             symbol: str,
             trader: FuturesTrader,
+            trade_ratio: float,
+            asset: str,
+            leverage: int,
     ):
-        super().__init__(symbol, trader)
+        super().__init__(symbol=symbol, trader=trader, trade_ratio=trade_ratio, asset=asset, leverage=leverage)
         d_input = 5
         seq_len = 512
         d_hidden = 1024
@@ -38,11 +38,9 @@ class GoldMinerStrategy(Strategy):
         self.model.requires_grad_(False)
         self.signal = NONE
 
-    def on_candle(
+    def __call__(
             self,
             candles: np.ndarray,
-            trade_info: SymbolTradeInfo,
-            balances: Dict[str, Balance],
     ):
         model_input = candles[-self.model.config["seq_len"]:, 1:].copy()
         model_input[:, :4] = normalize_around_price(model_input[:, :4], price=model_input[-1, 3])
@@ -64,45 +62,31 @@ class GoldMinerStrategy(Strategy):
         if signal != NONE:
             if self.signal != signal:
                 self.signal = signal
-                if self.trader.get_position(trade_info.symbol) is not None:
-                    self.trader.close_position()
+                if self.trader.get_position(self.symbol) is not None:
+                    self.trader.close_position(self.symbol)
 
-            if self.trader.get_position(trade_info.symbol) is None:
-                self.trader.cancel_orders(trade_info.symbol)
+            if self.trader.get_position(self.symbol) is None:
+                self.trader.cancel_orders(self.symbol)
 
                 latest_close = candles[-1][CLOSE_PRICE_INDEX]
-                quantity = calculate_quantity(
-                    side=signal,
-                    balance=balances["USDT"],
-                    leverage=self.trader.get_leverage(trade_info.symbol),
+                quantity = self.get_quantity(
+                    signal=signal,
                     price=latest_close,
-                    percentage=self.trader.trade_ratio,
                 )
 
                 stop_loss_price = (
-                    latest_close - latest_close * 1 * self.trader.trade_ratio
+                    latest_close - latest_close * 1 * self.trade_ratio
                     if signal == LONG
-                    else latest_close + latest_close * 1 * self.trader.trade_ratio
+                    else latest_close + latest_close * 1 * self.trade_ratio
                 )
                 take_profit_price = (
-                    latest_close - latest_close * self.trader.trade_ratio
+                    latest_close - latest_close * self.trade_ratio
                     if signal == SHORT
-                    else latest_close + latest_close * self.trader.trade_ratio
+                    else latest_close + latest_close * self.trade_ratio
                 )
 
-                self.trader.create_position(
-                    Order.market(
-                        symbol=trade_info.symbol,
-                        quantity=quantity,
-                    ),
-                    Order.take_profit_market(
-                        symbol=trade_info.symbol,
-                        quantity=-quantity,
-                        stop_price=take_profit_price,
-                    ),
-                    Order.stop_market(
-                        symbol=trade_info.symbol,
-                        quantity=-quantity,
-                        stop_price=stop_loss_price,
-                    ),
+                self.enter_position(
+                    quantity=quantity,
+                    take_profit_price=take_profit_price,
+                    stop_loss_price=stop_loss_price,
                 )

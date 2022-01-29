@@ -1,11 +1,12 @@
-from backtest.helper import run_backtest
-from consts.candle_index import *
-from indicator.heikin_ashi import HeikinAshiIndicator
-from indicator.ma_trend import MATrendIndicator
+from trader.core.enum import CandlestickType
+from trader.core.const.candle_index import *
+from trader.backtest.plot import Plot
 
-from indicator.mixed.heikin_ashi_ma_trend import HeikinAshiMATrendIndicator
-from plot import Plot
-from plot.plotter import CandlestickType
+from backtest.strategy_runner import backtest_strategy
+
+from indicator.signal import HeikinAshiIndicator, DoubleMATrendIndicator, MAPriceIndicator
+from indicator.sltp import ATRIndicator
+
 from strategy import IndicatorStrategy
 
 
@@ -17,14 +18,18 @@ if __name__ == "__main__":
     lower_limit = 30
 
     ha_ind = HeikinAshiIndicator()
-    ma_trend_ind = MATrendIndicator(
-        slow_period=30, fast_period=10, fast_column_index=CLOSE_PRICE_INDEX,
+    ha_exit_ind = HeikinAshiIndicator()
+    ma_price_ex_ind = MAPriceIndicator(ma_period=200, ma_type="EMA", ma_column_index=CLOSE_PRICE_INDEX)
+
+    ma_price_ind = MAPriceIndicator(ma_period=200, ma_type="EMA", ma_column_index=CLOSE_PRICE_INDEX)
+    ma_trend_ind = DoubleMATrendIndicator(
+        slow_period=200, fast_period=50, fast_column_index=CLOSE_PRICE_INDEX,
         slow_type="EMA", fast_type="EMA", slow_column_index=CLOSE_PRICE_INDEX,
     )
 
-    ha_ma_trend_ind = HeikinAshiMATrendIndicator(ha=ha_ind, ma_trend=ma_trend_ind)
+    atr_indicator = ATRIndicator()
 
-    run_backtest(
+    backtest_strategy(
         symbol="BTCUSDT",
         interval="15m",
         market="FUTURES",
@@ -32,10 +37,13 @@ if __name__ == "__main__":
         skip=256,
         trade_ratio=0.85,
         start_cash=1000,
+        maker_fee_rate=0.0002,
+        taker_fee_rate=0.0004,
         leverage=1,
         strategy_type=IndicatorStrategy,
-        indicator=ha_ma_trend_ind,
-        candlestick_type=CandlestickType.LINE,
+        indicators=[ma_price_ind, ha_ind],
+        exit_indicators=[ha_exit_ind],
+        candlestick_type=CandlestickType.HEIKIN_ASHI,
         extra_plots=[
             Plot(
                 number=2,
@@ -43,7 +51,7 @@ if __name__ == "__main__":
                 data_callback=ma_trend_ind,
                 params=[
                     dict(
-                        y=MATrendIndicator.SLOW_MA_INDEX,
+                        y=DoubleMATrendIndicator.SLOW_MA_INDEX,
                         name="Slow MA",
                         opacity=0.8,
                         line=dict(
@@ -52,7 +60,7 @@ if __name__ == "__main__":
                         )
                     ),
                     dict(
-                        y=MATrendIndicator.FAST_MA_INDEX,
+                        y=DoubleMATrendIndicator.FAST_MA_INDEX,
                         name="Fast MA",
                         opacity=0.8,
                         line=dict(
